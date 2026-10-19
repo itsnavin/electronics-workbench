@@ -1,6 +1,73 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseIPv4, ipv4, parsePrefix, maskPrefix, prefixMask, binaryIPv4, subnet, addressScope, subnetSources } from '../subnet.js';
+import { parseIPv4, ipv4, parsePrefix, maskPrefix, prefixMask, binaryIPv4, subnet, addressScope, subnetSources, gatewayInfo, gatewaySource } from '../subnet.js';
+
+test('gateway unknown, conventional candidates and ordinary address checks', () => {
+  const unknown = gatewayInfo('192.168.1.10', 24);
+  assert.equal(unknown.status, 'unknown');
+  assert.equal(unknown.supplied, null);
+  assert.match(unknown.message, /cannot determine/);
+  assert.deepEqual(unknown.suggestions, ['192.168.1.1', '192.168.1.254']);
+  for (const ip of ['192.168.1.1', '192.168.1.254', '192.168.1.99']) {
+    const result = gatewayInfo('192.168.1.10', 24, ip);
+    assert.equal(result.status, 'plausible');
+    assert.equal(result.supplied, ip);
+    assert.match(result.message, /arithmetic checks only/);
+  }
+  assert.deepEqual(gatewayInfo('192.168.1.1', 24).suggestions, ['192.168.1.254']);
+  assert.deepEqual(gatewayInfo('192.168.1.254', 24).suggestions, ['192.168.1.1']);
+  assert.match(gatewayInfo('192.168.1.10', 24, '192.168.1.10').message, /local address/);
+  for (const ip of ['192.168.1.0', '192.168.1.255']) {
+    assert.equal(gatewayInfo('192.168.1.10', 24, ip).status, 'invalid');
+    assert.match(gatewayInfo('192.168.1.10', 24, ip).message, /network or directed-broadcast/);
+  }
+  const outside = gatewayInfo('192.168.1.10', 24, '192.168.2.1');
+  assert.equal(outside.status, 'conditional');
+  assert.match(outside.message, /Outside/);
+  assert.match(outside.message, /exceptions/);
+});
+
+test('gateway syntax invalidity does not hide base subnet results or echo raw HTML', () => {
+  for (const ip of ['999.1.1.1', '1.2.3', '-1.1.1.1', '01.2.3.4', '<img src=x>']) {
+    const result = gatewayInfo('192.168.1.10', 24, ip);
+    assert.equal(result.status, 'invalid');
+    assert.equal(result.supplied, null);
+    assert.match(result.message, /Gateway syntax/);
+    assert.ok(!result.message.includes(ip));
+  }
+  assert.equal(gatewayInfo('192.168.1.10', 24, '   ').status, 'unknown');
+  assert.equal(subnet('192.168.1.10', 24).usable, 254);
+});
+
+test('gateway /31 peer and /32 explicit-route cases are conditional, not impossible', () => {
+  for (const [local, peer] of [['192.0.2.10', '192.0.2.11'], ['192.0.2.11', '192.0.2.10']]) {
+    const result = gatewayInfo(local, 31, peer);
+    assert.equal(result.status, 'conditional');
+    assert.match(result.message, /other \/31 endpoint/);
+    assert.deepEqual(result.suggestions, []);
+  }
+  assert.match(gatewayInfo('192.0.2.10', 31, '192.0.2.12').message, /Outside/);
+  const host = gatewayInfo('192.0.2.10', 32, '192.0.2.1');
+  assert.equal(host.status, 'conditional');
+  assert.match(host.message, /explicit host\/on-link route/);
+  assert.deepEqual(host.suggestions, []);
+  assert.equal(gatewayInfo('192.0.2.10', 32, '192.0.2.10').status, 'invalid');
+});
+
+test('gateway suggestions are restricted to wholly RFC1918 conventional subnets', () => {
+  for (const [ip, prefix] of [['10.1.2.3', 0], ['128.0.0.10', 1], ['10.0.0.10', 7], ['8.8.8.8', 24], ['127.0.0.10', 24], ['169.254.1.10', 24], ['192.0.2.10', 24], ['224.0.0.10', 24], ['10.0.0.0', 24], ['10.0.0.255', 24], ['10.0.0.1', 31], ['10.0.0.1', 32]]) {
+    assert.deepEqual(gatewayInfo(ip, prefix).suggestions, [], `${ip}/${prefix}`);
+  }
+  assert.equal(gatewayInfo('10.0.0.10', 8).suggestions.length, 2);
+  assert.match(gatewayInfo('10.0.0.10', 0, '8.8.8.8').message, /\/0 contains all IPv4/);
+  for (const ip of ['0.0.0.0', '127.0.0.1', '224.0.0.1', '255.255.255.255']) {
+    assert.equal(gatewayInfo('10.0.0.10', 0, ip).status, 'invalid');
+  }
+  assert.equal(gatewayInfo('192.0.2.10', 24, '192.0.2.1').status, 'conditional');
+  assert.match(gatewayInfo('192.0.2.10', 24, '192.0.2.1').message, /special-use/);
+  assert.equal(gatewayInfo('200.123.45.10', 24, '200.123.45.1').status, 'plausible');
+  assert.match(gatewaySource.url, /ip-route/);
+});
 
 test('strict decimal IPv4 parsing and unsigned arithmetic', () => {
   for (const ip of ['0.0.0.0', '127.0.0.1', '128.0.0.1', '192.168.1.10', '255.255.255.255']) assert.equal(ipv4(parseIPv4(ip)), ip);

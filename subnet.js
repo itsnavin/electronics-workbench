@@ -6,6 +6,50 @@ export const subnetSources = [
   { title: 'RFC 1918: private address space', url: 'https://www.rfc-editor.org/rfc/rfc1918.html' },
   { title: 'IANA: IPv4 Special-Purpose Address Space', url: 'https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml' },
 ];
+export const gatewaySource = { title: 'ip-route manual: route display, lookup and onlink semantics', url: 'https://man7.org/linux/man-pages/man8/ip-route.8.html' };
+
+export function gatewayInfo(addressText, prefixText, gatewayText = '') {
+  const block = subnet(addressText, prefixText);
+  const address = parseIPv4(block.address);
+  const start = parseIPv4(block.network), end = parseIPv4(block.last);
+  const privateBlocks = [['10.0.0.0', 8], ['172.16.0.0', 12], ['192.168.0.0', 16]];
+  const inOnePrivateBlock = privateBlocks.some(([ip, prefix]) => {
+    const base = parseIPv4(ip);
+    return start >= base && end < base + 2 ** (32 - prefix);
+  });
+  const suggestions = block.prefix <= 30 && inOnePrivateBlock && address > start && address < end
+    ? [...new Set([block.firstHost, block.lastHost])].filter(ip => ip !== block.address) : [];
+  const result = (status, message, supplied = null) => ({ status, message, supplied, suggestions });
+  if (!String(gatewayText).trim()) {
+    return result('unknown', 'Configured gateway: unknown. IP and mask cannot determine it, and this static website cannot discover it.');
+  }
+  let gateway;
+  try { gateway = parseIPv4(gatewayText); }
+  catch (error) { return result('invalid', `Gateway syntax: ${error.message}`); }
+  const supplied = ipv4(gateway);
+  if (gateway === address) return result('invalid', 'Gateway equals the entered local address; it is not a distinct next-hop router. Verify the local address and routing configuration.', supplied);
+  if (gateway < 2 ** 24 || Math.floor(gateway / 2 ** 24) === 127 || gateway >= parseIPv4('224.0.0.0')) {
+    return result('invalid', 'Not an ordinary unicast next-hop address: unspecified/this-network, loopback, multicast, reserved or limited-broadcast space. Check actual route semantics, not just subnet membership.', supplied);
+  }
+  if (block.prefix === 32) {
+    return result('conditional', '/32 has no distinct in-subnet peer. An external gateway may work with an explicit host/on-link route or point-to-point configuration; this calculator cannot verify that configuration.', supplied);
+  }
+  if (gateway < start || gateway > end) {
+    return result('conditional', 'Outside the calculated subnet: fails the usual directly connected gateway check. Explicit on-link/host routes or point-to-point configuration can be exceptions; verify actual routes rather than assuming this can never work.', supplied);
+  }
+  if (block.prefix <= 30 && (gateway === start || gateway === end)) {
+    return result('invalid', 'This is the conventional network or directed-broadcast address, not a usable gateway host under the selected subnet model.', supplied);
+  }
+  if (block.prefix <= 30 && (address === start || address === end)) {
+    return result('conditional', 'The entered local address is the conventional network or broadcast address. Correct/verify the local host configuration before treating this gateway check as meaningful.', supplied);
+  }
+  if (block.prefix === 0) return result('conditional', '/0 contains all IPv4 addresses; membership alone does not establish an on-link gateway. Verify the real interface prefix and routes. No gateway convention is suggested.', supplied);
+  if (block.prefix === 31) return result('conditional', 'This is the other /31 endpoint. It can be a next hop on a supporting RFC 3021 point-to-point link; it is not a discovered or confirmed default gateway.', supplied);
+  if (!addressScope(supplied).startsWith('RFC 1918 private') && !addressScope(supplied).startsWith('Not RFC 1918 private')) {
+    return result('conditional', 'Within the conventional host range, but the gateway is in a selected special-use block. Purpose-specific routing restrictions apply; this is not a recommendation or reachability check.', supplied);
+  }
+  return result('plausible', 'Within the conventional host range and distinct from the local address. Passes arithmetic checks only: not evidence that a router exists, is configured as your gateway, or is reachable.', supplied);
+}
 
 export function parseIPv4(value) {
   const text = String(value).trim();

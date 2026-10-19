@@ -264,6 +264,43 @@ def run():
         page.get_by_role("button", name="Copy result").click()
         expect(page.locator("#copy-status")).to_contain_text("Copied")
         assert "192.168.1.0/24" in page.evaluate("navigator.clipboard.readText()")
+        expect(page.locator("#gateway-result")).to_contain_text("Actual configured gateway: unknown")
+        expect(page.locator("#gateway-result")).to_contain_text("not configured facts")
+        for gateway, message in [
+            ("192.168.1.1", "Passes arithmetic checks only"),
+            ("192.168.2.1", "Outside the calculated subnet"),
+            ("192.168.1.0", "network or directed-broadcast"),
+            ("192.168.1.255", "network or directed-broadcast"),
+            ("192.168.1.10", "local address"),
+            ("999.1.1.1", "Gateway syntax"),
+        ]:
+            page.get_by_label("Gateway IPv4 address").fill(gateway)
+            expect(page.locator("#subnet-result")).to_be_empty()
+            page.get_by_label("Gateway IPv4 address").press("Enter")
+            expect(page.locator("#gateway-assessment")).to_contain_text(message)
+            expect(page.locator("#subnet-summary")).to_contain_text("192.168.1.0/24")
+        page.get_by_label("Gateway IPv4 address").fill("192.168.1.1")
+        page.get_by_label("Gateway IPv4 address").press("Enter")
+        page.get_by_role("button", name="Copy result").click()
+        copied = page.evaluate("navigator.clipboard.readText()")
+        assert "User-entered gateway (not detected): 192.168.1.1" in copied
+        assert "Actual configured gateway: unknown" in copied and "arithmetic checks only" in copied
+        page.locator("#ip-prefix").fill("31")
+        page.get_by_label("Gateway IPv4 address").fill("192.168.1.11")
+        page.get_by_label("Gateway IPv4 address").press("Enter")
+        expect(page.locator("#gateway-assessment")).to_contain_text("other /31 endpoint")
+        page.locator("#ip-prefix").fill("32")
+        page.get_by_label("Gateway IPv4 address").press("Enter")
+        expect(page.locator("#gateway-assessment")).to_contain_text("explicit host/on-link")
+        page.locator("#ip-prefix").fill("0")
+        page.get_by_label("Gateway IPv4 address").press("Enter")
+        expect(page.locator("#gateway-assessment")).to_contain_text("/0 contains all")
+        expect(page.locator("#gateway-result")).to_contain_text("No first/last-host")
+        page.locator("#ip-prefix").fill("24")
+        page.get_by_label("Gateway IPv4 address").fill("")
+        page.get_by_label("Gateway IPv4 address").press("Enter")
+        expect(page.locator("#gateway-assessment")).to_contain_text("Configured gateway: unknown")
+        print("PASS optional gateway, syntax/range/subnet checks, /31 /32 /0 caveats and copied assessment")
         page.screenshot(path=str(ARTIFACTS / "desktop-subnet.png"), full_page=True)
         print("PASS IPv4 masks/prefixes, /0 /1 /31 /32, invalid inputs, unsigned values, binary, Enter and copy")
 
@@ -279,9 +316,15 @@ def run():
                     page.get_by_label("Wiring standard").select_option("T568A")
                     expect(page.locator('[data-wire-pin="1"] td').first).to_have_text("White/Green")
                 else:
+                    for gateway, message in [("999.1.1.1", "Gateway syntax"), ("192.168.2.1", "Outside"), ("192.168.1.255", "directed-broadcast")]:
+                        page.get_by_label("Gateway IPv4 address").fill(gateway)
+                        page.get_by_label("Gateway IPv4 address").press("Enter")
+                        expect(page.locator("#gateway-assessment")).to_contain_text(message)
                     page.locator("#ip-prefix").fill("31")
-                    page.locator("#ip-prefix").press("Enter")
+                    page.get_by_label("Gateway IPv4 address").fill("192.168.1.11")
+                    page.get_by_label("Gateway IPv4 address").press("Enter")
                     expect(page.locator("#subnet-summary")).to_contain_text("RFC 3021")
+                    expect(page.locator("#gateway-assessment")).to_contain_text("other /31 endpoint")
                 page.screenshot(path=str(ARTIFACTS / f"mobile-{route}.png"), full_page=True)
         go("gpio")
         page.locator('[data-pin="11"]').click()

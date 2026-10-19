@@ -21,7 +21,7 @@ assets. All calculations run in the browser. GitHub Pages provides static hostin
 | IC library | TI NE555P PDIP-8, LM358P PDIP-8, SN74HC00N PDIP-14 only |
 | Raspberry Pi | Pi 4 Model B, Pi 5, Zero 2 W; interactive 40-pin header, physical/BCM lookup, power/ground, reserved HAT pins |
 | Ethernet cable reference | Selectable T568A/T568B, numbered contact-side 8P8C plug, wire names/pairs, straight-through/crossover, Gigabit and PoE cautions |
-| IPv4 subnet calculator | CIDR or contiguous mask, network/wildcard/broadcast, host slots/range, explicit /31 and /32 semantics, binary view and copy |
+| IPv4 subnet calculator | CIDR or contiguous mask, network/wildcard/broadcast, host slots/range, /31 and /32 semantics, optional gateway assessment, binary view and copy |
 
 Electronics calculators include SI unit conversion, validation, plain-language formulas,
 worked examples, assumptions and copyable output. Search and hash routes support
@@ -127,6 +127,36 @@ The /31 model assumes a supporting point-to-point link; /32 means one host/route
 RFC 1918 checks are exact; other scope labels cover only selected common blocks,
 not the evolving full registry. Scope describes the input address, not its whole
 calculated subnet. No category claims allocation, routability or reachability.
+
+### Gateway information
+
+The actual configured default gateway **cannot be calculated from IP/mask** or
+discovered by this static site. An optional user-entered gateway is checked for
+IPv4 syntax, conventional subnet/host membership, equality with the local address,
+and selected non-unicast/special-use ranges. Arithmetic passes are labeled as
+plausible only, never detected or reachable. Invalid gateway input does not hide
+otherwise valid subnet arithmetic, and the copied result includes the gateway
+assessment and unknown-configured-gateway disclaimer.
+
+Outside-subnet gateways are conditional: explicit host/on-link routes or
+point-to-point configurations may be exceptions. /31 can use its other endpoint
+on a supporting link; /32 has no distinct in-subnet peer but may use explicit
+routes. First/last-host conventions are shown only for a wholly RFC1918 /0-/30
+subnet with a conventional local host address, excluding that local address.
+They are examples, not router assignments or recommendations. No candidates
+are shown for /0, /31, /32, public or selected special-use contexts.
+
+Help describes router/DHCP/Ubuntu connection details and read-only Linux
+`ip route show default` and `ip route get <destination>` inspection. The latter
+asks the kernel for a selected route, not a ping or scan. Policy routing, VPNs,
+multiple defaults and routes without `via` need actual configuration context.
+Source reviewed 2026-10-20:
+[ip-route manual](https://man7.org/linux/man-pages/man8/ip-route.8.html).
+The Ubuntu help host returned HTTP 503 during reference retrieval; GUI directions
+are intentionally generic and note version-dependent labels.
+Gateway tests cover unknown input, malformed octets, self/network/broadcast
+addresses, off-subnet conditional cases, /0-/31-/32 and special-use boundaries,
+plus desktop/mobile entry and copy output.
 
 To update/add content:
 
