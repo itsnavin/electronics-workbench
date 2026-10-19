@@ -1,6 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pins, boards, lookup, ics, sources, verified } from '../catalog.js';
+import { pins, boards, lookup, ics, sources, verified, ethernet, ethernetPins } from '../catalog.js';
+
+test('all eight T568A and T568B pins and four twisted pairs match the sources', () => {
+  const expected = {
+    T568A: ['White/Green', 'Green', 'White/Orange', 'Blue', 'White/Blue', 'Orange', 'White/Brown', 'Brown'],
+    T568B: ['White/Orange', 'Orange', 'White/Green', 'Blue', 'White/Blue', 'Green', 'White/Brown', 'Brown'],
+  };
+  for (const standard of Object.keys(expected)) {
+    const wires = ethernetPins(standard);
+    assert.deepEqual(wires.map(wire => wire.color), expected[standard]);
+    assert.deepEqual(wires.map(wire => wire.pin), [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.equal(wires.filter(wire => wire.striped).length, 4);
+    assert.deepEqual(wires.filter(wire => wire.pair === 1).map(wire => wire.pin), [4, 5]);
+    assert.deepEqual(wires.filter(wire => wire.pair === 4).map(wire => wire.pin), [7, 8]);
+    assert.deepEqual(wires.filter(wire => wire.pair === 2).map(wire => wire.pin), standard === 'T568A' ? [3, 6] : [1, 2]);
+    assert.deepEqual(wires.filter(wire => wire.pair === 3).map(wire => wire.pin), standard === 'T568A' ? [1, 2] : [3, 6]);
+    for (const pair of [1, 2, 3, 4]) assert.equal(wires.filter(wire => wire.pair === pair).length, 2);
+  }
+  const cross = ethernetPins('T568A').map(wire => ethernetPins('T568B').find(other => other.color === wire.color).pin);
+  assert.deepEqual(cross, [3, 6, 1, 4, 5, 2, 7, 8]);
+  assert.throws(() => ethernetPins('T568C'));
+  assert.throws(() => ethernetPins('toString'));
+});
+
+test('Ethernet orientation and provenance are explicit', () => {
+  for (const word of ['gold contacts facing you', 'latch hidden underneath', 'cable entry down', 'Pin 1 is left', 'pin 8 is right', 'Not a socket']) assert.ok(ethernet.orientation.includes(word));
+  assert.match(ethernet.verified, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(ethernet.sources.length, 4);
+  assert.ok(ethernet.sources.every(source => source.title && new URL(source.url).protocol === 'https:'));
+});
 
 const expectedBCM = [null, null, 2, null, 3, null, 4, 14, null, 15, 17, 18, 27, null, 22, 23, null, 24, 10, null, 9, 25, 11, 8, null, 7, 0, 1, 5, null, 6, 12, 13, null, 19, 16, 26, 20, null, 21];
 

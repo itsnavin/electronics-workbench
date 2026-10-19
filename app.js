@@ -1,5 +1,6 @@
 import * as calc from './calculators.js';
-import { boards, pins, lookup, ics, sources, verified } from './catalog.js';
+import { boards, pins, lookup, ics, sources, verified, ethernet, ethernetPins } from './catalog.js';
+import { subnet, parsePrefix, maskPrefix, prefixMask, binaryIPv4, subnetSources } from './subnet.js';
 
 const main = document.querySelector('main');
 const $ = selector => main.querySelector(selector);
@@ -36,14 +37,18 @@ function circuitSvg(kind = 'divider') {
 function home() {
   main.innerHTML = `<section class="hero"><div><div class="eyebrow">Your bench, a little smarter</div><h1>Less guesswork.<br>More <em>making.</em></h1><p>From your first resistor to your next Raspberry Pi project. Practical calculators, clear pinouts, and the explanations behind them.</p><div class="actions"><a class="button" href="#calculators">Open the toolbox &rarr;</a><a class="button secondary" href="#gpio">Find a GPIO pin</a></div><p class="muted" style="margin-top:18px">No account. No tracking. Just electronics.</p></div>
     <div class="hero-board"><svg viewBox="0 0 400 235" role="img" aria-label="Original illustration of a resistor, integrated circuit, and header on a workbench"><g fill="none" stroke="#365b50" stroke-width="2"><path d="M0 40h90v55h90m40 0h85V30h95M0 185h95v-60h100m35 20h70v65h100M160 0v50h60m-60 125v60"/><circle cx="90" cy="40" r="5"/><circle cx="300" cy="210" r="5"/></g><g stroke="#aec7bf" stroke-width="4"><path d="M10 95h65m100 0h40M25 145h50m100 0h40"/></g><rect x="75" y="76" width="100" height="38" rx="15" fill="#d7c6a5"/><path d="M96 77v36" stroke="#855034" stroke-width="9"/><path d="M114 77v36" stroke="#171c24" stroke-width="9"/><path d="M133 77v36" stroke="#d93644" stroke-width="9"/><path d="M156 77v36" stroke="#c5a043" stroke-width="7"/><rect x="75" y="133" width="100" height="25" rx="8" fill="#14202b" stroke="#78e2bd"/><text x="98" y="150" fill="#78e2bd" font-family="monospace" font-size="13">1 kohm</text><g stroke="#a2b6c1" stroke-width="5"><path d="M228 70h16m-16 20h16m-16 20h16m-16 20h16m70-60h16m-16 20h16m-16 20h16m-16 20h16"/></g><rect x="244" y="55" width="70" height="90" rx="6" fill="#09131e" stroke="#67847b"/><path d="M268 55a11 11 0 0 0 22 0" fill="none" stroke="#67847b"/><circle cx="255" cy="72" r="3" fill="#f0c175"/><text x="255" y="108" fill="#9bb5aa" font-family="monospace" font-size="11">NE555P</text><g fill="#f0c175"><circle cx="348" cy="173" r="5"/><circle cx="368" cy="173" r="5"/><circle cx="348" cy="192" r="5"/><circle cx="368" cy="192" r="5"/><circle cx="348" cy="211" r="5"/><circle cx="368" cy="211" r="5"/></g></svg><div class="board-caption"><span>REFERENCE / CALCULATE / UNDERSTAND</span><span>REV 01</span></div></div></section>
-    <section aria-labelledby="explore-title"><div class="section-heading"><h2 id="explore-title">A place for every little question.</h2><p>Three toolsheds. One workbench.</p></div><div class="cards">
+    <section aria-labelledby="explore-title"><div class="section-heading"><h2 id="explore-title">A place for every little question.</h2><p>Components, connections, and networks.</p></div><div class="cards">
     <a class="card card-link" href="#calculators"><span class="tag">01 / CALCULATE</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Electronics calculators</h3><p>Seven everyday tools. Units, worked examples, and no mystery numbers.</p></a>
     <a class="card card-link" href="#ic"><span class="tag">02 / REFERENCE</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Inside the IC</h3><p>Three carefully sourced TI packages, with orientation and pin functions.</p></a>
-    <a class="card card-link" href="#gpio"><span class="tag">03 / CONNECT</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Raspberry Pi GPIO</h3><p>Physical pin or BCM? Find the right connection on three supported boards.</p></a></div></section>${safety}
+    <a class="card card-link" href="#gpio"><span class="tag">03 / CONNECT</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Raspberry Pi GPIO</h3><p>Physical pin or BCM? Find the right connection on three supported boards.</p></a>
+    <a class="card card-link" href="#ethernet"><span class="tag">04 / CABLE REFERENCE</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Ethernet wire colors</h3><p>T568A and T568B: eight numbered contacts, four twisted pairs.</p></a>
+    <a class="card card-link" href="#subnet"><span class="tag">05 / NETWORK MATH</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>IPv4 subnet calculator</h3><p>Network, mask, address range, and clear /31 and /32 semantics.</p></a></div></section>${safety}
     <section><div class="section-heading"><h2>What are you working on?</h2></div><label class="search" for="tool-search"><span>Search calculators and references</span><input id="tool-search" type="search" placeholder="Try resistor, LED, GPIO, or LM358"></label><div class="cards" id="search-results"></div><p id="search-count" class="muted" role="status"></p></section>`;
   const entries = [...tools.map(tool => ({ ...tool, url: `#calculators/${tool.id}` })),
     ...ics.map(ic => ({ name: ic.name, description: `${ic.category} / ${ic.package}`, url: `#ic/${ic.id}` })),
-    { name: 'Raspberry Pi GPIO', description: 'Pi 4 Model B, Pi 5, Zero 2 W physical pin and BCM lookup', url: '#gpio' }];
+    { name: 'Raspberry Pi GPIO', description: 'Pi 4 Model B, Pi 5, Zero 2 W physical pin and BCM lookup', url: '#gpio' },
+    { name: 'Ethernet wire colors', description: 'RJ45 8P8C T568A T568B cable color code, twisted pairs and crossover', url: '#ethernet' },
+    { name: 'IPv4 subnet calculator', description: 'IP address CIDR prefix subnet mask network broadcast wildcard host range', url: '#subnet' }];
   function filter() {
     const term = $('#tool-search').value.trim().toLowerCase();
     const results = entries.filter(entry => `${entry.name} ${entry.description}`.toLowerCase().includes(term));
@@ -253,6 +258,83 @@ gpioinfo</pre><p>Match the controller label (for example an RP1 pin controller o
   boardNote(); submit();
 }
 
+function ethernetReference() {
+  main.innerHTML = `${intro('Reference / copper Ethernet', 'Eight contacts. Four pairs.', 'T568A and T568B wire colors for an 8P8C modular plug, commonly called RJ45. This is a visual reference, not a cable certification or termination guide.')}
+    <div class="gpio-layout"><section class="card">${select('ethernet-standard', 'Wiring standard', [['T568A', 'T568A'], ['T568B', 'T568B']], 'T568B')}
+    <p id="plug-orientation" class="muted" style="margin-top:18px">${ethernet.orientation}</p><div id="plug-view" aria-live="polite"></div></section>
+    <section class="card"><h2>Pin-to-wire reference</h2><div id="wire-table" aria-live="polite"></div></section></div>
+    <div class="strip"><strong>PoE can energize the pairs.</strong> Disconnect both cable ends from powered equipment, switches and PoE injectors before termination or passive cable testing. Use an appropriate tester and follow its voltage/PoE rating and instructions; a basic continuity tester is not for live links. No mains work.</div>
+    <div class="cards" style="margin-top:24px"><section class="card"><h2>Straight-through</h2><p>Use the same scheme at both ends: A-to-A or B-to-B. Each pin connects to the same numbered pin (1 to 1 through 8 to 8). Follow your existing installation requirements; neither scheme is inherently faster. Inspect both plugs in the same orientation.</p></section>
+    <section class="card"><h2>Crossover is different</h2><p>A-to-B swaps pins 1/2 with 3/6 (1 to 3, 2 to 6, 3 to 1, 6 to 2), while 4, 5, 7 and 8 stay straight. This is the traditional two-pair 10/100 crossover, <strong>not a universal Gigabit crossover</strong>. Four-pair crossover arrangements for 1000BASE-T also exchange the blue/brown pair positions. Consult the device's cabling requirements.</p></section>
+    <section class="card"><h2>Auto-MDI-X</h2><p>Many modern ports automatically adapt to straight-through or crossover pair arrangements. Support and configuration vary: check both devices. Auto-MDI-X does not fix split pairs, broken conductors, poor terminations or an unsuitable cable.</p></section></div>
+    <section class="card" style="margin-top:24px"><h2>Why the pair groupings matter</h2><p>10BASE-T and 100BASE-TX carry data over pin pairs 1-2 and 3-6. 1000BASE-T (Gigabit copper) uses all four pairs: 1-2, 3-6, 4-5 and 7-8, bidirectionally. Do not call the other conductors universally spare: PoE may use pairs for power, and Gigabit needs all eight conductors.</p><p>Keep each original twisted pair together and preserve twists close to the termination, following the connector/cable manufacturer's instructions. Pins 3 and 6 are a pair even though 4 and 5 sit between them. A split pair can show correct pin-to-pin continuity yet have severe crosstalk.</p><p>Use a cable tester to check wire map, opens, shorts and miswires, and a tester with split-pair detection for pair integrity. A simple LED continuity pass does not establish category performance, Gigabit reliability, or TIA compliance; performance verification needs suitable test equipment. Cable jacket color does not identify T568A/T568B or prove capability. Keystone jacks may have different physical punch-down layouts: follow their own A/B labels, not this plug drawing.</p></section>
+    <p class="source-line">Factual color/pair reference; original diagram, no paid standard reproduced. Checked ${ethernet.verified}. ${ethernet.sources.map(source => `<a href="${source.url}">${source.title}</a>`).join(' &middot; ')}</p>`;
+  function render() {
+    const standard = $('#ethernet-standard').value;
+    const wires = ethernetPins(standard);
+    $('#plug-view').innerHTML = `<h2 id="plug-title">${standard} / contact-side view</h2><div class="ethernet-plug" role="img" aria-labelledby="plug-title" aria-describedby="plug-orientation plug-sequence"><div class="plug-nose">MATING NOSE / AWAY &uarr;</div><div class="plug-contacts">${wires.map(wire => `<div class="wire-contact"><b>${wire.pin}</b><span class="wire${wire.striped ? ' striped' : ''}" style="--wire:${wire.hex}"></span></div>`).join('')}</div><div class="plug-latch">LATCH UNDERNEATH / HIDDEN</div><div class="plug-cable">CABLE ENTRY / TOWARD YOU &darr;</div></div><p id="plug-sequence" class="muted"><strong>Pin 1 at left; pin 8 at right.</strong><br>${wires.map(wire => `${wire.pin}: ${wire.color}`).join(' / ')}</p>`;
+    $('#wire-table').innerHTML = `<table><caption>${standard} / pin order 1 to 8</caption><thead><tr><th scope="col">Pin</th><th scope="col">Wire color</th><th scope="col">Twisted pair</th></tr></thead><tbody>${wires.map(wire => `<tr data-wire-pin="${wire.pin}"><th scope="row">${wire.pin}</th><td><span class="wire-swatch${wire.striped ? ' striped' : ''}" style="--wire:${wire.hex}" aria-hidden="true"></span>${wire.color}</td><td>Pair ${wire.pair}: ${wire.pairColor}</td></tr>`).join('')}</tbody></table><div class="explanation"><h3>Pair members / ${standard}</h3>${[1, 2, 3, 4].map(pair => { const members = wires.filter(wire => wire.pair === pair); return `<p>Pair ${pair} (${members[0].pairColor}): pins ${members.map(wire => wire.pin).join(' and ')}.</p>`; }).join('')}</div>`;
+  }
+  $('#ethernet-standard').addEventListener('change', render); render();
+}
+
+function subnetCalculator() {
+  main.innerHTML = `${intro('Calculate / IPv4 only', 'See the subnet behind an address.', 'Calculate IPv4 ranges without scanning, connecting to, or configuring a network. All input stays in your browser.')}
+    <section class="card"><form id="subnet-form" novalidate><div class="form-grid">${textField('ip-address', 'IPv4 address', '192.168.1.10')}${select('mask-mode', 'Define subnet using', [['prefix', 'CIDR prefix'], ['mask', 'Dotted-decimal subnet mask']], 'prefix')}<div id="prefix-field">${textField('ip-prefix', 'CIDR prefix (0-32, no slash)', '24')}</div><div id="mask-field" hidden>${textField('ip-mask', 'Contiguous subnet mask', '255.255.255.0')}</div></div><p id="mask-equivalent" class="muted" role="status"></p><button class="primary" type="submit">Calculate subnet &rarr;</button></form>
+    <div id="subnet-error" class="error" role="alert"></div><div id="subnet-result" class="result" role="status"></div>
+    ${explanation('Block size = 2^(32 - prefix); network = floor(address / block size) x block size', 'IPv4 has 32 bits. A /24 fixes 24 network bits and leaves 8 host bits, giving 256 addresses. A subnet mask has continuous 1 bits for the network, then 0 bits for hosts. The wildcard is the inverse of that mask. For /0 through /30, this tool excludes the network and directed-broadcast addresses from the conventional host range; special-use ranges may impose additional restrictions.', '192.168.1.10/24 gives network 192.168.1.0, mask 255.255.255.0, wildcard 0.0.0.255, broadcast 192.168.1.255 and 254 conventional host slots (.1 through .254). /31 is explicitly modeled for RFC 3021 point-to-point links; /32 represents one host/route. /0 is the whole IPv4 space/default route, not a practical LAN of billions of assignable hosts.')}
+    </section><div class="strip"><strong>Arithmetic is not reachability.</strong> Scope labels describe only the input address, not every address in a potentially much larger subnet. Not RFC 1918 private does not automatically mean public, allocated, reachable, or safe to assign. Selected special-use labels are not an exhaustive registry. Consult IANA, your administrator and device documentation; this tool does not test connectivity.</div>
+    <p class="source-line">References checked 2026-10-20: ${subnetSources.map(source => `<a href="${source.url}">${source.title}</a>`).join(' &middot; ')}</p>`;
+  const clear = () => { $('#subnet-error').textContent = ''; $('#subnet-result').replaceChildren(); };
+  let activeMode = 'prefix';
+  function sync() {
+    clear();
+    const isPrefix = $('#mask-mode').value === 'prefix';
+    $('#prefix-field').hidden = !isPrefix; $('#mask-field').hidden = isPrefix;
+    try {
+      const prefix = isPrefix ? parsePrefix($('#ip-prefix').value) : maskPrefix($('#ip-mask').value);
+      const mask = prefixMask(prefix);
+      $('#ip-prefix').value = String(prefix); $('#ip-mask').value = mask;
+      $('#mask-equivalent').textContent = `Equivalent: /${prefix} = ${mask}`;
+    } catch (error) {
+      $('#mask-equivalent').textContent = 'No valid equivalent until the subnet input is corrected.';
+      $('#subnet-error').textContent = error.message;
+      return false;
+    }
+    return true;
+  }
+  $('#mask-mode').addEventListener('change', () => {
+    // Switching input mode must not silently restore an older valid subnet.
+    try {
+      const prefix = activeMode === 'prefix' ? parsePrefix($('#ip-prefix').value) : maskPrefix($('#ip-mask').value);
+      $('#ip-prefix').value = String(prefix); $('#ip-mask').value = prefixMask(prefix);
+    } catch {
+      if ($('#mask-mode').value === 'prefix') $('#ip-prefix').value = '';
+      else $('#ip-mask').value = '';
+    }
+    activeMode = $('#mask-mode').value;
+    sync();
+  });
+  for (const id of ['ip-prefix', 'ip-mask']) $(`#${id}`).addEventListener('input', sync);
+  $('#ip-address').addEventListener('input', clear);
+  $('#subnet-form').addEventListener('submit', event => {
+    event.preventDefault();
+    if (!sync()) return;
+    try {
+      const result = subnet($('#ip-address').value, $('#ip-prefix').value);
+      $('#subnet-result').innerHTML = `<div id="subnet-summary"><span class="big">${result.network}/${result.prefix}</span><table><caption>IPv4 subnet result</caption><tbody>${[
+        ['Input address', result.address], ['Network / block base', result.network], ['Subnet mask', result.mask], ['Wildcard mask', result.wildcard],
+        ['Directed broadcast', result.broadcast ?? 'Not applicable for /31 or /32'], ['Last address in block', result.last],
+        ['Total addresses', result.total.toLocaleString('en-US')], ['Host slots (under stated semantics)', result.usable.toLocaleString('en-US')],
+        ['Host range', `${result.firstHost} to ${result.lastHost}`],
+      ].map(([label, value]) => `<tr><th scope="row">${label}</th><td>${value}</td></tr>`).join('')}</tbody></table><p>${result.semantics}</p><p>Input address scope: ${result.scope}</p></div>
+      <details><summary>Binary view / ${result.prefix} network bits, ${32 - result.prefix} host bits</summary><p>Dots separate octets; the prefix counts network bits from the left.</p>${[['Address', result.address], ['Mask', result.mask], ['Network', result.network], ['Wildcard', result.wildcard]].map(([label, value]) => `<p>${label}<code class="binary">${binaryIPv4(value)}</code></p>`).join('')}</details>${copyButton}`;
+      wireCopy(() => $('#subnet-summary').innerText);
+    } catch (error) { $('#subnet-error').textContent = error.message; }
+  });
+  sync(); $('#subnet-form').requestSubmit();
+}
+
 function about() {
   main.innerHTML = `<article class="about">${intro('Read before connecting', 'A reference, not a guarantee.', 'A transparent, small workbench for learning C, embedded systems, Linux, and practical electronics.')}
     <h2>What this app does (and does not do)</h2><p>All calculations and lookups happen in your browser. There is no backend, account, analytics, hardware detection, GPIO access, or remote control. GitHub Pages serves the static files and may maintain its normal hosting logs. Clipboard access happens only when you press Copy. No third-party fonts, scripts, images, or APIs are loaded.</p>
@@ -260,6 +342,7 @@ function about() {
     <h2>Curated, package-specific IC references</h2><p>Only the listed exact Texas Instruments parts/packages are covered. Pin diagrams are original visualizations of factual pin tables; no datasheet diagrams are copied. Verify the package and marking on the part in front of you. Recommended supply ranges do not imply signal-level compatibility, and absolute maximum ratings are not normal operating conditions.</p>
     <ul>${ics.map(ic => `<li><a href="${ic.source}">${ic.name} / ${ic.package}</a>: ${ic.doc}, ${ic.revision}; ${ic.sections}. Checked ${ic.verified}. <a href="${ic.product}">Orderable part</a>.</li>`).join('')}</ul>
     <h2>Raspberry Pi provenance</h2><p>The three supported boards use the standard 40-pin header. The official header diagram and GPIO documentation were checked from Raspberry Pi's own repository because automated access to its documentation web host returned HTTP 403. Board notes explicitly distinguish Pi 5 RP1 and Zero 2 W's unpopulated header. No Linux gpiochip number or deprecated global integer is claimed.</p><ul><li><a href="${sources.gpioSource}">Official GPIO documentation source</a> and <a href="${sources.gpioDiagram}">official pinout diagram</a>, checked ${verified}.</li><li><a href="${sources.rp1}">Official RP1 I/O controller documentation</a>, checked ${verified}.</li><li><a href="${sources.gpiod}">libgpiod reference</a>: consult your installed version's help for command syntax. Linux line metadata is not live electrical validation.</li></ul>
+    <h2>Ethernet and IPv4 references</h2><p>The <a href="#ethernet">Ethernet reference</a> links manufacturer color-code, pair and testing documentation. Its original contact-side plug diagram is not a socket or latch-side view. This is not TIA certification. Disconnect possible PoE sources before termination/passive testing and use appropriate equipment. The <a href="#subnet">IPv4 calculator</a> links CIDR, RFC 3021, RFC 1918 and IANA references. It models /31 point-to-point and /32 host-route semantics explicitly; arithmetic and scope labels never establish reachability. No network scanning or configuration is performed.</p>
     <h2>Calculator assumptions</h2><p>Resistor bands support exactly representable 4/5-band nonzero values; no zero-ohm or no-tolerance codes. Ohm's law, networks, and dividers assume ideal resistors and DC magnitudes. LED sizing assumes a fixed supply and LED drop, with an E24 recommendation accounting for 5% resistor tolerance, not LED/supply variation. RC models assume ideal step response. 555 estimates use the standard datasheet topologies, not diode-modified oscillators. Every tool includes its own worked example and limits.</p><p><a href="https://github.com/itsnavin/electronics-workbench">Source, tests, content maintenance and publishing instructions</a></p></article>`;
 }
 
@@ -270,12 +353,14 @@ function notFound() {
 function route(focus = true) {
   const [section = 'home', id, ...extra] = location.hash.slice(1).split('/').filter(Boolean);
   main.replaceChildren();
-  const known = ['home', 'calculators', 'ic', 'gpio', 'about'].includes(section);
+  const known = ['home', 'calculators', 'ic', 'gpio', 'ethernet', 'subnet', 'about'].includes(section);
   if (extra.length || (id && !['calculators', 'ic'].includes(section)) || !known) notFound();
   else if (section === 'home') home();
   else if (section === 'calculators') calculators(id);
   else if (section === 'ic') icLibrary(id);
   else if (section === 'gpio') gpio();
+  else if (section === 'ethernet') ethernetReference();
+  else if (section === 'subnet') subnetCalculator();
   else about();
   document.querySelectorAll('[data-nav]').forEach(link => {
     if (link.dataset.nav === section) link.setAttribute('aria-current', 'page');

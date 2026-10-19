@@ -45,7 +45,7 @@ def run():
             # Optional isolation from host HTTP-injecting software; CI uses real HTTP.
             def serve_file(route):
                 name = route.request.url.removeprefix(base).split("?")[0].split("#")[0] or "index.html"
-                if name not in {"index.html", "styles.css", "app.js", "calculators.js", "catalog.js"}:
+                if name not in {"index.html", "styles.css", "app.js", "calculators.js", "catalog.js", "subnet.js"}:
                     raise RuntimeError(f"Unexpected asset request: {name}")
                 route.fulfill(path=str(ROOT / "dist" / name))
             context.route(base + "**", serve_file)
@@ -198,13 +198,91 @@ def run():
         page.screenshot(path=str(ARTIFACTS / "desktop-gpio.png"), full_page=True)
         print("PASS all boards, bidirectional lookup, power/reserved pins, invalid input, keyboard and copy success/failure")
 
+        go("home")
+        page.get_by_label("Search calculators and references").fill("T568")
+        expect(page.locator("#search-results a")).to_have_count(1)
+        page.locator("#search-results a").click()
+        expect(page.locator("h1")).to_contain_text("Eight contacts")
+        expected_wires = {
+            "T568A": ["White/Green", "Green", "White/Orange", "Blue", "White/Blue", "Orange", "White/Brown", "Brown"],
+            "T568B": ["White/Orange", "Orange", "White/Green", "Blue", "White/Blue", "Green", "White/Brown", "Brown"],
+        }
+        for standard, colors in expected_wires.items():
+            page.get_by_label("Wiring standard").select_option(standard)
+            expect(page.locator("#plug-title")).to_contain_text(standard)
+            expect(page.locator(".wire-contact b")).to_have_text([str(i) for i in range(1, 9)])
+            for index, color in enumerate(colors):
+                expect(page.locator(f'[data-wire-pin="{index+1}"] td').first).to_have_text(color)
+            expect(page.locator("#plug-orientation")).to_contain_text("latch hidden underneath")
+            expect(page.locator("#plug-orientation")).to_contain_text("Pin 1 is left")
+            expect(page.locator(".plug-cable")).to_contain_text("TOWARD YOU")
+        page.get_by_label("Wiring standard").focus()
+        page.keyboard.press("ArrowUp")
+        expect(page.get_by_label("Wiring standard")).to_have_value("T568A")
+        page.screenshot(path=str(ARTIFACTS / "desktop-ethernet.png"), full_page=True)
+        print("PASS Ethernet A/B all eight colors, pair data, orientation, search and keyboard")
+
+        go("subnet")
+        expect(page.locator("#subnet-summary")).to_contain_text("192.168.1.0/24")
+        page.locator("#ip-prefix").fill("31")
+        page.get_by_role("button", name="Calculate subnet").click()
+        expect(page.locator("#subnet-summary")).to_contain_text("RFC 3021")
+        expect(page.locator("#subnet-summary")).to_contain_text("192.168.1.10 to 192.168.1.11")
+        page.get_by_label("Define subnet using").select_option("mask")
+        expect(page.locator("#ip-mask")).to_have_value("255.255.255.254")
+        page.locator("#ip-mask").fill("255.255.255.255")
+        page.get_by_role("button", name="Calculate subnet").click()
+        expect(page.locator("#subnet-summary")).to_contain_text("single-host")
+        page.get_by_label("Define subnet using").select_option("prefix")
+        expect(page.locator("#ip-prefix")).to_have_value("32")
+        for prefix, expected in [("0", "4,294,967,296"), ("1", "2,147,483,648")]:
+            page.locator("#ip-prefix").fill(prefix)
+            page.get_by_role("button", name="Calculate subnet").click()
+            expect(page.locator("#subnet-summary")).to_contain_text(expected)
+        page.locator("#ip-address").fill("255.999.1.1")
+        page.get_by_role("button", name="Calculate subnet").click()
+        expect(page.locator("#subnet-error")).to_contain_text("four decimal")
+        expect(page.locator("#subnet-result")).to_be_empty()
+        page.locator("#ip-address").fill("200.123.45.67")
+        page.locator("#ip-prefix").fill("24abc")
+        page.get_by_role("button", name="Calculate subnet").click()
+        expect(page.locator("#subnet-error")).to_contain_text("whole number")
+        page.get_by_label("Define subnet using").select_option("mask")
+        expect(page.locator("#ip-mask")).to_have_value("")
+        page.locator("#ip-mask").fill("255.0.255.0")
+        page.get_by_role("button", name="Calculate subnet").click()
+        expect(page.locator("#subnet-error")).to_contain_text("contiguous")
+        expect(page.locator("#subnet-result")).to_be_empty()
+        page.locator("#ip-mask").fill("255.255.240.0")
+        page.locator("#ip-mask").press("Enter")
+        expect(page.locator("#subnet-summary")).to_contain_text("200.123.32.0/20")
+        page.get_by_text("Binary view / 20 network bits", exact=False).click()
+        expect(page.locator(".binary").first).to_have_text("11001000.01111011.00101101.01000011")
+        # Reload to restore the real clipboard after the deliberate failure stub.
+        page.reload()
+        expect(page.locator("#subnet-summary")).to_contain_text("192.168.1.0/24")
+        page.get_by_role("button", name="Copy result").click()
+        expect(page.locator("#copy-status")).to_contain_text("Copied")
+        assert "192.168.1.0/24" in page.evaluate("navigator.clipboard.readText()")
+        page.screenshot(path=str(ARTIFACTS / "desktop-subnet.png"), full_page=True)
+        print("PASS IPv4 masks/prefixes, /0 /1 /31 /32, invalid inputs, unsigned values, binary, Enter and copy")
+
         for route in ["home", "calculators/resistor", "calculators/ohm", "calculators/led", "calculators/network",
-                      "calculators/divider", "calculators/rc", "calculators/timer", "ic/lm358p", "ic/sn74hc00n", "gpio", "about"]:
+                      "calculators/divider", "calculators/rc", "calculators/timer", "ic/lm358p", "ic/sn74hc00n", "gpio", "ethernet", "subnet", "about"]:
             page.set_viewport_size({"width": 375, "height": 812})
             go(route)
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), f"Horizontal overflow: {route}"
             assert page.locator("main h1").count() == 1
             assert page.locator("input:not([id]), select:not([id])").count() == 0
+            if route in ["ethernet", "subnet"]:
+                if route == "ethernet":
+                    page.get_by_label("Wiring standard").select_option("T568A")
+                    expect(page.locator('[data-wire-pin="1"] td').first).to_have_text("White/Green")
+                else:
+                    page.locator("#ip-prefix").fill("31")
+                    page.locator("#ip-prefix").press("Enter")
+                    expect(page.locator("#subnet-summary")).to_contain_text("RFC 3021")
+                page.screenshot(path=str(ARTIFACTS / f"mobile-{route}.png"), full_page=True)
         go("gpio")
         page.locator('[data-pin="11"]').click()
         expect(page.locator("#pin-result")).to_contain_text("BCM 17")

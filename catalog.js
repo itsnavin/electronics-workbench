@@ -1,4 +1,28 @@
 export const verified = '2026-10-19';
+export const ethernet = {
+  verified: '2026-10-20',
+  orientation: 'Contact-side view of the plug: gold contacts facing you, latch hidden underneath, mating nose pointing up/away, cable entry down/toward you. Pin 1 is left; pin 8 is right. Not a socket/front-on or latch-side view.',
+  sources: [
+    { title: 'trueCABLE: T568A vs T568B (wire color sequences)', url: 'https://www.truecable.com/blogs/cable-academy/t568a-vs-t568b' },
+    { title: 'trueCABLE: plug contact/latch orientation', url: 'https://www.truecable.com/blogs/cable-academy/how-to-terminate-an-unshielded-pass-through-rj45-connector' },
+    { title: 'Cisco: two-pair and four-pair cabling, auto-MDIX', url: 'https://www.cisco.com/en/US/docs/switches/lan/catalyst2960/hardware/installation/guide_/higcable_ps6406_TSD_Products_Installation_Guide_Chapter.html' },
+    { title: 'Fluke Networks: split-pair identification and tester limitations', url: 'https://www.flukenetworks.com/knowledge-base/linkiq/split-pair-identification' },
+  ],
+  standards: {
+    T568A: ['White/Green', 'Green', 'White/Orange', 'Blue', 'White/Blue', 'Orange', 'White/Brown', 'Brown'],
+    T568B: ['White/Orange', 'Orange', 'White/Green', 'Blue', 'White/Blue', 'Green', 'White/Brown', 'Brown'],
+  },
+};
+
+export function ethernetPins(standard) {
+  if (!Object.hasOwn(ethernet.standards, standard)) throw new Error('Choose T568A or T568B.');
+  const pairs = { Blue: 1, Orange: 2, Green: 3, Brown: 4 };
+  const hex = { Blue: '#387dcc', Orange: '#ef923d', Green: '#39976c', Brown: '#96623e' };
+  return ethernet.standards[standard].map((color, i) => {
+    const pairColor = color.split('/').at(-1);
+    return { pin: i + 1, color, pairColor, pair: pairs[pairColor], hex: hex[pairColor], striped: color.startsWith('White/') };
+  });
+}
 export const sources = {
   gpio: 'https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#gpio',
   gpioSource: 'https://github.com/raspberrypi/documentation/blob/master/documentation/asciidoc/computers/raspberry-pi/gpio-on-raspberry-pi.adoc',
