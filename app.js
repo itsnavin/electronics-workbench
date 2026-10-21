@@ -1,6 +1,7 @@
 import * as calc from './calculators.js';
 import { boards, pins, lookup, ics, sources, verified, ethernet, ethernetPins } from './catalog.js';
 import { subnet, parsePrefix, maskPrefix, prefixMask, binaryIPv4, subnetSources, gatewayInfo, gatewaySource } from './subnet.js';
+import { meterGuides, meterSafety, learningReferences, learningReviewed } from './guides.js';
 
 const main = document.querySelector('main');
 const $ = selector => main.querySelector(selector);
@@ -16,10 +17,11 @@ const tools = [
   { id: 'divider', name: 'Voltage divider', tag: '05 / VOLTAGE', description: 'Explore an unloaded divider and what a load changes.' },
   { id: 'rc', name: 'Capacitor & RC', tag: '06 / TIME & FILTERS', description: 'Find charging time and a first-order filter cutoff.' },
   { id: 'timer', name: '555 timer', tag: '07 / TIMING', description: 'Estimate standard astable or monostable timing.' },
+  { id: 'transformer', name: 'Ideal transformer', tag: '08 / AC THEORY', description: 'Explore primary / secondary AC voltage, turns, current and apparent power.' },
 ];
 
 const intro = (eyebrow, title, text) => `<div class="page-intro"><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${text}</p></div>`;
-const safety = `<div class="strip"><strong>Small circuits. Careful connections.</strong> Ideal models for learning, not a safety approval. Use low-voltage DC only. Power off before wiring. No mains or high-energy projects.</div>`;
+const safety = `<div class="strip"><strong>Small circuits. Careful connections.</strong> Ideal models for learning, not a safety approval. Practical circuit tools cover low-voltage DC; transformer AC calculations are theory only. Power off before wiring. No mains or high-energy projects.</div>`;
 const options = (items, selected) => items.map(([value, label]) => `<option value="${value}"${String(value) === String(selected) ? ' selected' : ''}>${label}</option>`).join('');
 const select = (id, title, items, selected) => `<div><label for="${id}"><span>${title}</span></label><select id="${id}" name="${id}">${options(items, selected)}</select></div>`;
 const quantity = (id, title, value, unitOptions, selected = unitOptions[0][0]) => `<div><label for="${id}"><span>${title}</span></label><div class="quantity"><input id="${id}" name="${id}" type="number" step="any" value="${value}" required><select id="${id}-unit" aria-label="${title} unit">${options(unitOptions, selected)}</select></div></div>`;
@@ -38,13 +40,15 @@ function home() {
   main.innerHTML = `<section class="hero"><div><div class="eyebrow">Your bench, a little smarter</div><h1>Less guesswork.<br>More <em>making.</em></h1><p>From your first resistor to your next Raspberry Pi project. Practical calculators, clear pinouts, and the explanations behind them.</p><div class="actions"><a class="button" href="#calculators">Open the toolbox &rarr;</a><a class="button secondary" href="#gpio">Find a GPIO pin</a></div><p class="muted" style="margin-top:18px">No account. No tracking. Just electronics.</p></div>
     <div class="hero-board"><svg viewBox="0 0 400 235" role="img" aria-label="Original illustration of a resistor, integrated circuit, and header on a workbench"><g fill="none" stroke="#365b50" stroke-width="2"><path d="M0 40h90v55h90m40 0h85V30h95M0 185h95v-60h100m35 20h70v65h100M160 0v50h60m-60 125v60"/><circle cx="90" cy="40" r="5"/><circle cx="300" cy="210" r="5"/></g><g stroke="#aec7bf" stroke-width="4"><path d="M10 95h65m100 0h40M25 145h50m100 0h40"/></g><rect x="75" y="76" width="100" height="38" rx="15" fill="#d7c6a5"/><path d="M96 77v36" stroke="#855034" stroke-width="9"/><path d="M114 77v36" stroke="#171c24" stroke-width="9"/><path d="M133 77v36" stroke="#d93644" stroke-width="9"/><path d="M156 77v36" stroke="#c5a043" stroke-width="7"/><rect x="75" y="133" width="100" height="25" rx="8" fill="#14202b" stroke="#78e2bd"/><text x="98" y="150" fill="#78e2bd" font-family="monospace" font-size="13">1 kohm</text><g stroke="#a2b6c1" stroke-width="5"><path d="M228 70h16m-16 20h16m-16 20h16m-16 20h16m70-60h16m-16 20h16m-16 20h16m-16 20h16"/></g><rect x="244" y="55" width="70" height="90" rx="6" fill="#09131e" stroke="#67847b"/><path d="M268 55a11 11 0 0 0 22 0" fill="none" stroke="#67847b"/><circle cx="255" cy="72" r="3" fill="#f0c175"/><text x="255" y="108" fill="#9bb5aa" font-family="monospace" font-size="11">NE555P</text><g fill="#f0c175"><circle cx="348" cy="173" r="5"/><circle cx="368" cy="173" r="5"/><circle cx="348" cy="192" r="5"/><circle cx="368" cy="192" r="5"/><circle cx="348" cy="211" r="5"/><circle cx="368" cy="211" r="5"/></g></svg><div class="board-caption"><span>REFERENCE / CALCULATE / UNDERSTAND</span><span>REV 01</span></div></div></section>
     <section aria-labelledby="explore-title"><div class="section-heading"><h2 id="explore-title">A place for every little question.</h2><p>Components, connections, and networks.</p></div><div class="cards">
-    <a class="card card-link" href="#calculators"><span class="tag">01 / CALCULATE</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Electronics calculators</h3><p>Seven everyday tools. Units, worked examples, and no mystery numbers.</p></a>
+    <a class="card card-link" href="#calculators"><span class="tag">01 / CALCULATE</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Electronics calculators</h3><p>${tools.length} learning tools. Units, worked examples, and no mystery numbers.</p></a>
     <a class="card card-link" href="#ic"><span class="tag">02 / REFERENCE</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Inside the IC</h3><p>Three carefully sourced TI packages, with orientation and pin functions.</p></a>
     <a class="card card-link" href="#gpio"><span class="tag">03 / CONNECT</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Raspberry Pi GPIO</h3><p>Physical pin or BCM? Find the right connection on three supported boards.</p></a>
     <a class="card card-link" href="#ethernet"><span class="tag">04 / CABLE REFERENCE</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Ethernet wire colors</h3><p>T568A and T568B: eight numbered contacts, four twisted pairs.</p></a>
-    <a class="card card-link" href="#subnet"><span class="tag">05 / NETWORK MATH</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>IPv4 subnet calculator</h3><p>Network, mask, address range, and clear /31 and /32 semantics.</p></a></div></section>${safety}
+    <a class="card card-link" href="#subnet"><span class="tag">05 / NETWORK MATH</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>IPv4 subnet calculator</h3><p>Network, mask, address range, and clear /31 and /32 semantics.</p></a>
+    <a class="card card-link" href="#multimeter"><span class="tag">06 / BENCH GUIDES</span><span class="arrow" aria-hidden="true">&nearr;</span><h3>Multimeter component checks</h3><p>Resistors, capacitors and diodes: what readings mean, and what they cannot prove.</p></a></div></section>${safety}
     <section><div class="section-heading"><h2>What are you working on?</h2></div><label class="search" for="tool-search"><span>Search calculators and references</span><input id="tool-search" type="search" placeholder="Try resistor, LED, GPIO, or LM358"></label><div class="cards" id="search-results"></div><p id="search-count" class="muted" role="status"></p></section>`;
   const entries = [...tools.map(tool => ({ ...tool, url: `#calculators/${tool.id}` })),
+    ...meterGuides.map(guide => ({ name: `${guide.name}: multimeter guide`, description: guide.search, url: `#multimeter/${guide.id}` })),
     ...ics.map(ic => ({ name: ic.name, description: `${ic.category} / ${ic.package}`, url: `#ic/${ic.id}` })),
     { name: 'Raspberry Pi GPIO', description: 'Pi 4 Model B, Pi 5, Zero 2 W physical pin and BCM lookup', url: '#gpio' },
     { name: 'Ethernet wire colors', description: 'RJ45 8P8C T568A T568B cable color code, twisted pairs and crossover', url: '#ethernet' },
@@ -62,8 +66,9 @@ function home() {
 function calculators(id = 'resistor') {
   const tool = tools.find(tool => tool.id === id);
   if (!tool) return notFound();
-  main.innerHTML = `${intro('Calculate / understand', 'Make the numbers make sense.', 'Ideal circuit models, practical units, and a little explanation at every step.')}<div class="workspace"><nav class="sidebar" aria-label="Calculator navigation"><small>THE TOOLBOX</small>${tools.map(item => `<a href="#calculators/${item.id}"${item.id === id ? ' aria-current="page"' : ''}>${item.name}</a>`).join('')}</nav><section class="card"><div class="tool-head"><div><h2>${tool.name}</h2><p>${tool.description}</p></div><span class="tool-id">${tool.tag.split(' / ')[0]} / 07</span></div><div id="tool-content"></div></section></div>${safety}`;
+  main.innerHTML = `${intro('Calculate / understand', 'Make the numbers make sense.', 'Ideal circuit models, practical units, and a little explanation at every step.')}<div class="workspace"><nav class="sidebar" aria-label="Calculator navigation"><small>THE TOOLBOX</small>${tools.map(item => `<a href="#calculators/${item.id}"${item.id === id ? ' aria-current="page"' : ''}>${item.name}</a>`).join('')}</nav><section class="card"><div class="tool-head"><div><h2>${tool.name}</h2><p>${tool.description}</p></div><span class="tool-id">${tool.tag.split(' / ')[0]} / ${String(tools.length).padStart(2, '0')}</span></div><div id="tool-content"></div></section></div>${safety}`;
   if (id === 'resistor') return resistor();
+  if (id === 'transformer') return transformer();
   const content = $('#tool-content');
   const config = {
     ohm: {
@@ -146,7 +151,8 @@ function calculators(id = 'resistor') {
 
 function resistor() {
   $('#tool-content').innerHTML = `<div class="form-grid">${select('band-count', 'Band count', [[4, '4 bands (2 digits)'], [5, '5 bands (3 digits)']], 4)}${select('resistor-mode', 'Direction', [['read', 'Colors to resistance'], ['write', 'Resistance to colors']], 'read')}</div><div id="resistor-work"></div>
-    ${explanation('Resistance = significant digits x multiplier; range = nominal +/- tolerance', 'Read from the end opposite the separated tolerance band. The first 2 digits (4-band) or 3 digits (5-band) form a number, then the multiplier scales it. A first black digit is not valid for these nonzero codes. Gold is x0.1 or +/-5%; silver is x0.01 or +/-10%. Zero-ohm jumpers and unbanded tolerance are outside this tool.', 'Brown, black, red, gold = 10 x 100 = 1 kohm, +/-5%, or 950 to 1050 ohm. Five-band brown, black, black, brown, brown = 1 kohm +/-1%.')}`;
+    ${explanation('Resistance = significant digits x multiplier; range = nominal +/- tolerance', 'Read toward the separated tolerance band when that spacing is unambiguous. A brown/red tolerance can also look like a digit: if spacing or markings are ambiguous, check packaging/manufacturer documentation rather than guessing direction. The first 2 digits (4-band) or 3 digits (5-band) form a number, then the multiplier scales it. Five bands mean digit 1, digit 2, digit 3, multiplier, tolerance; a sixth temperature-coefficient band is not supported. A first black digit is not valid for these nonzero codes. Gold is x0.1 or +/-5%; silver is x0.01 or +/-10%. Zero-ohm jumpers and unbanded tolerance are outside this tool.', 'Brown, black, red, gold = 10 x 100 = 1 kohm, +/-5%, or 950 to 1050 ohm. Five-band yellow, violet, black, brown, brown = 470 x 10 = 4.7 kohm +/-1% (4653 to 4747 ohm), not 47 kohm. Red, red, black, gold, brown = 220 x 0.1 = 22 ohm +/-1%.')}
+    <p class="source-line"><a href="${learningReferences.color.url}">${learningReferences.color.title}</a>. Reviewed ${learningReviewed}. Supported table: digits black 0 through white 9 (first digit nonzero); multipliers silver x0.01 through white x1e9; tolerances brown 1%, red 2%, green 0.5%, blue 0.25%, violet 0.1%, grey 0.05%, gold 5%, silver 10%. Not a universal decoder for every manufacturer marking. <a href="#multimeter/resistor">Check an isolated resistor with a DMM.</a></p>`;
   function setup() {
     const count = Number($('#band-count').value);
     const read = $('#resistor-mode').value === 'read';
@@ -173,6 +179,69 @@ function resistor() {
   $('#band-count').addEventListener('change', setup);
   $('#resistor-mode').addEventListener('change', setup);
   setup();
+}
+
+function transformer() {
+  const labels = { vp: 'Primary voltage Vp (RMS)', vs: 'Secondary voltage Vs (RMS)', np: 'Primary turns Np', ns: 'Secondary turns Ns' };
+  const defaults = { vp: 12, vs: 6, np: 600, ns: 300 };
+  $('#tool-content').innerHTML = `<div class="strip"><strong>Theory, not winding instructions.</strong> No mains connection, live probing, wire sizing or safe-design claim. Even a low input voltage can produce dangerous output voltage. A turns ratio or winding resistance cannot establish insulation, isolation or a safe rating.</div>
+    <svg class="diagram transformer-diagram" viewBox="0 0 420 180" role="img" aria-label="Original conceptual transformer: separate primary and secondary windings linked by changing magnetic flux in a core, no wired connection shown between windings">
+    <g stroke="currentColor" stroke-width="2" fill="none"><path d="M60 40h90c28 0 28 25 0 25c28 0 28 25 0 25c28 0 28 25 0 25c28 0 28 25 0 25H60M360 40h-90c-28 0-28 25 0 25c-28 0-28 25 0 25c-28 0-28 25 0 25c-28 0-28 25 0 25h90M205 32v116m10-116v116"/></g>
+    <g fill="currentColor" font-family="monospace" font-size="12"><text x="45" y="22">Primary: Vp, Np, Ip</text><text x="245" y="22">Secondary: Vs, Ns, Is</text><text x="95" y="172">Changing magnetic flux in core</text></g></svg>
+    <form id="transformer-form" novalidate><div class="form-grid">${select('transformer-solve', 'Find unknown voltage or turns', Object.entries(labels).map(([key, label]) => [key, label]), 'vs')}<div class="wide form-grid" id="transformer-inputs" style="margin:0"></div>
+    ${select('transformer-load', 'Include an ideal load-current calculation?', [['yes', 'Yes - known current in one winding'], ['no', 'No - voltage / turns only']], 'yes')}
+    <div id="transformer-load-fields" class="wide form-grid" style="margin:0">${select('transformer-side', 'Known current winding', [['secondary', 'Secondary (find primary current)'], ['primary', 'Primary (find secondary current)']], 'secondary')}${quantity('transformer-current', 'Known RMS current', 200, currentUnits)}</div></div>
+    <button class="primary" type="submit">Calculate &rarr;</button></form><div id="calc-error" class="error" role="alert"></div><div id="calc-result" class="result" role="status"></div>
+    ${explanation('Vs / Vp = Ns / Np; Ip / Is = Ns / Np; S = Vp x Ip = Vs x Is (VA)', 'A changing primary current produces changing magnetic flux; coupled flux induces secondary voltage (Faraday induction). More secondary turns raises voltage and lowers current for the same ideal transferred apparent power; fewer turns does the reverse. Use AC RMS magnitudes at the same operating frequency. Steady DC does not provide continuous transformer action and can cause saturation/overheating; do not apply DC as an experiment. The ideal model ignores leakage flux, winding loss, core loss and magnetizing current.', 'With 12 V RMS, 600 primary turns and 300 secondary turns: Vs = 6 V RMS. At Is = 200 mA, Ip = 100 mA and apparent power is 1.2 VA on each side. Energy is transferred, not created.')}
+    <div class="explanation"><h3>What this does not calculate</h3><p>V RMS x I RMS is apparent power in volt-amperes (VA), not automatically real watts. At unity power factor (such as an ideal resistive load), real power in watts is numerically equal; otherwise real power depends on power factor. This tool does not infer power factor or rated capacity. Calculated currents describe the entered ideal load, not maximum safe current.</p><p>Absolute turns require a known winding turn count as well as the voltage ratio. A fractional solved turn count is an unrounded ideal result, not a physically buildable winding prescription. Known turn counts must be positive whole numbers.</p><p>Real design additionally needs frequency, core material/area/flux limits, wire and thermal ratings, insulation, creepage/clearance, protection and losses/regulation. Not all transformer types provide galvanic isolation: an autotransformer shares a winding. This conceptual diagram does not certify isolation of any real device. Winding resistance is not an AC voltage ratio, turn-count measurement or safety test.</p><p class="source-line"><a href="${learningReferences.transformer.url}">${learningReferences.transformer.title}</a>. Reviewed ${learningReviewed}; original low-voltage numerical example, not a physical experiment.</p></div>`;
+  const form = $('#transformer-form');
+  const clear = () => { $('#calc-result').replaceChildren(); $('#calc-error').textContent = ''; };
+  function fields() {
+    $('#transformer-inputs').innerHTML = Object.entries(labels).filter(([key]) => key !== $('#transformer-solve').value).map(([key, label]) =>
+      key.startsWith('v') ? quantity(`transformer-${key}`, label, defaults[key], voltageUnits) : `<div><label for="transformer-${key}"><span>${label} (whole turns)</span></label><input id="transformer-${key}" type="number" step="1" min="1" value="${defaults[key]}" required></div>`).join('');
+    clear();
+  }
+  $('#transformer-solve').addEventListener('change', fields);
+  $('#transformer-load').addEventListener('change', () => { $('#transformer-load-fields').hidden = $('#transformer-load').value === 'no'; clear(); });
+  form.addEventListener('input', clear);
+  form.addEventListener('change', clear);
+  form.addEventListener('submit', event => {
+    event.preventDefault(); clear();
+    try {
+      const solve = $('#transformer-solve').value;
+      const known = Object.fromEntries(Object.keys(labels).filter(key => key !== solve).map(key => [key, key.startsWith('v')
+        ? calc.convert($(`#transformer-${key}`).value, 'voltage', $(`#transformer-${key}-unit`).value, labels[key])
+        : $(`#transformer-${key}`).value]));
+      const load = $('#transformer-load').value === 'yes' ? { side: $('#transformer-side').value, current: calc.convert($('#transformer-current').value, 'current', $('#transformer-current-unit').value, 'Known RMS current', true) } : null;
+      const result = calc.idealTransformer(solve, known, load);
+      const display = key => key.startsWith('v') ? calc.format(result[key], 'V') : `${Number(result[key].toPrecision(12))} turns`;
+      const rows = Object.keys(labels).map(key => [labels[key] + (key === solve ? ' (calculated)' : ''), display(key)]);
+      rows.push(['Turns ratio Ns / Np', String(Number(result.ratio.toPrecision(8)))]);
+      if (load) rows.push(['Primary RMS current Ip', calc.format(result.ip, 'A')], ['Secondary RMS current Is', calc.format(result.is, 'A')], ['Ideal apparent power (each side)', `${Number(result.va.toPrecision(8))} VA`]);
+      const note = `Ideal AC theory only; not a winding design, safe current limit, real power or device rating.${load?.current === 0 ? ' Zero current is the ideal unloaded result; real transformers still draw magnetizing/loss current.' : ''}`;
+      const fractional = ['np', 'ns'].includes(solve) && !Number.isInteger(result[solve]);
+      $('#calc-result').innerHTML = `<span class="big">${labels[solve]}: ${display(solve)}</span><table><caption>Ideal transformer results</caption><tbody>${rows.map(([name, value]) => `<tr><th scope="row">${name}</th><td>${value}</td></tr>`).join('')}</tbody></table>${fractional ? '<p>Fractional ideal turn count: no rounding to a physical winding is performed.</p>' : ''}<p>${note}</p>${copyButton}`;
+      wireCopy(() => `${rows.map(([name, value]) => `${name}: ${value}`).join('\n')}\n${note}${fractional ? '\nFractional ideal turn count, not rounded to a physical winding.' : ''}`);
+    } catch (error) { $('#calc-error').textContent = error.message; }
+  });
+  fields(); form.requestSubmit();
+}
+
+function multimeter(id = 'resistor') {
+  const guide = meterGuides.find(item => item.id === id);
+  if (!guide) return notFound();
+  const table = (caption, headings, rows) => `<table class="guide-table"><caption>${caption}</caption><thead><tr>${headings.map(heading => `<th scope="col">${heading}</th>`).join('')}</tr></thead><tbody>${rows.map(([title, text]) => `<tr><th scope="row">${title}</th><td>${text}</td></tr>`).join('')}</tbody></table>`;
+  main.innerHTML = `${intro('Bench guides / disconnected components', 'What is your meter telling you?', 'Practical screening checks for resistors, capacitors and diodes. Choose the component family; no single meter test covers all types or proves a part safe.')}
+    <aside class="strip" aria-label="Multimeter safety"><strong>Before any component check.</strong> ${meterSafety}</aside>
+    <nav class="guide-nav" aria-label="Component guides">${meterGuides.map(item => `<a class="button secondary" href="#multimeter/${item.id}"${item.id === id ? ' aria-current="page"' : ''}>${item.name}</a>`).join('')}</nav>
+    <article class="card" id="meter-guide"><h2>${guide.name}: multimeter checks</h2><p><strong>Meter mode:</strong> ${guide.mode}.</p><p>Follow the manual for your exact meter, inputs, maximum ranges and test conditions. The current-input socket is not used for these checks.</p>
+    ${id === 'diode' ? '<div class="probe-reference" role="img" aria-label="Typical DMM forward diode check: red lead to anode, black lead to cathode; reverse leads for the second measurement"><strong>RED probe &rarr; ANODE (A)</strong><span>isolated diode junction</span><strong>BLACK probe &rarr; CATHODE (K)</strong><span>Forward direction above; reverse the leads for the second check. Check package markings, not lead length alone.</span></div>' : ''}
+    <h3>Procedure after safe isolation</h3><ol class="guide-steps">${guide.steps.map(step => `<li>${step}</li>`).join('')}</ol>
+    ${table('Component types and important differences', ['Type', 'How the check differs'], guide.types)}
+    <div class="explanation"><h3>Interpret both the reading and its limits</h3>${table('Reading interpretation: clues, not certification', ['Observation', 'Meaning / next check'], guide.readings)}</div>
+    <div class="strip"><strong>What a DMM cannot prove.</strong> ${guide.limits}</div>
+    ${id === 'resistor' ? '<p class="guide-link"><a href="#calculators/resistor">Read four- or five-band resistor colors and tolerance ranges &rarr;</a></p>' : id === 'capacitor' ? '<p class="guide-link"><a href="#calculators/rc">Explore ideal RC behavior (not a discharge safety procedure) &rarr;</a></p>' : ''}
+    <p class="source-line">References reviewed ${learningReviewed}. Original condensed guidance, not a substitute for the component datasheet, meter manual or safe-work training.<br>${guide.refs.map(key => `<a href="${learningReferences[key].url}">${learningReferences[key].title}</a>`).join('<br>')}</p></article>`;
 }
 
 function wireCopy(text) {
@@ -342,7 +411,8 @@ ip route get &lt;destination&gt;</pre><p>Replace <code>&lt;destination&gt;</code
 function about() {
   main.innerHTML = `<article class="about">${intro('Read before connecting', 'A reference, not a guarantee.', 'A transparent, small workbench for learning C, embedded systems, Linux, and practical electronics.')}
     <h2>What this app does (and does not do)</h2><p>All calculations and lookups happen in your browser. There is no backend, account, analytics, hardware detection, GPIO access, or remote control. GitHub Pages serves the static files and may maintain its normal hosting logs. Clipboard access happens only when you press Copy. No third-party fonts, scripts, images, or APIs are loaded.</p>
-    <h2>Safe scope</h2><p>Use these ideal models for low-voltage DC learning only, not mains or high-energy construction. Disconnect power before wiring. Check polarity, tolerances, input limits, real component data, and power derating. Do not connect high-current loads directly to GPIO. A calculated resistor power-rating candidate is not a guarantee of thermal safety.</p>
+    <h2>Safe scope</h2><p>Practical circuit tools cover low-voltage DC; the ideal transformer calculator is AC theory only, not mains or high-energy construction. Disconnect power before wiring. Check polarity, tolerances, input limits, real component data, and power derating. Do not connect high-current loads directly to GPIO. A calculated resistor power-rating candidate is not a guarantee of thermal safety.</p>
+    <h2>Multimeter guides and transformer theory</h2><p>The <a href="#multimeter">component guides</a> cover only disconnected, de-energized, isolated low-energy components. Stored energy must be removed by an appropriate manufacturer-approved procedure and absence of voltage verified with rated equipment by a competent person; no improvised discharge or live mains instructions are provided. DMM screening cannot certify all capacitor ESR/leakage, diode breakdown or power ratings. The <a href="#calculators/transformer">ideal transformer tool</a> solves voltage/turns ratios and optional load currents/apparent power in VA, not safe winding design or a real device rating. Fractional calculated turns are not rounded into a construction prescription.</p><ul>${Object.values(learningReferences).map(source => `<li><a href="${source.url}">${source.title}</a>; reviewed ${learningReviewed}.</li>`).join('')}</ul>
     <h2>Curated, package-specific IC references</h2><p>Only the listed exact Texas Instruments parts/packages are covered. Pin diagrams are original visualizations of factual pin tables; no datasheet diagrams are copied. Verify the package and marking on the part in front of you. Recommended supply ranges do not imply signal-level compatibility, and absolute maximum ratings are not normal operating conditions.</p>
     <ul>${ics.map(ic => `<li><a href="${ic.source}">${ic.name} / ${ic.package}</a>: ${ic.doc}, ${ic.revision}; ${ic.sections}. Checked ${ic.verified}. <a href="${ic.product}">Orderable part</a>.</li>`).join('')}</ul>
     <h2>Raspberry Pi provenance</h2><p>The three supported boards use the standard 40-pin header. The official header diagram and GPIO documentation were checked from Raspberry Pi's own repository because automated access to its documentation web host returned HTTP 403. Board notes explicitly distinguish Pi 5 RP1 and Zero 2 W's unpopulated header. No Linux gpiochip number or deprecated global integer is claimed.</p><ul><li><a href="${sources.gpioSource}">Official GPIO documentation source</a> and <a href="${sources.gpioDiagram}">official pinout diagram</a>, checked ${verified}.</li><li><a href="${sources.rp1}">Official RP1 I/O controller documentation</a>, checked ${verified}.</li><li><a href="${sources.gpiod}">libgpiod reference</a>: consult your installed version's help for command syntax. Linux line metadata is not live electrical validation.</li></ul>
@@ -357,10 +427,11 @@ function notFound() {
 function route(focus = true) {
   const [section = 'home', id, ...extra] = location.hash.slice(1).split('/').filter(Boolean);
   main.replaceChildren();
-  const known = ['home', 'calculators', 'ic', 'gpio', 'ethernet', 'subnet', 'about'].includes(section);
-  if (extra.length || (id && !['calculators', 'ic'].includes(section)) || !known) notFound();
+  const known = ['home', 'calculators', 'multimeter', 'ic', 'gpio', 'ethernet', 'subnet', 'about'].includes(section);
+  if (extra.length || (id && !['calculators', 'multimeter', 'ic'].includes(section)) || !known) notFound();
   else if (section === 'home') home();
   else if (section === 'calculators') calculators(id);
+  else if (section === 'multimeter') multimeter(id);
   else if (section === 'ic') icLibrary(id);
   else if (section === 'gpio') gpio();
   else if (section === 'ethernet') ethernetReference();

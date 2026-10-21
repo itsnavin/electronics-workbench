@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { convert, number, ohms, standardAbove, E12, E24, led, network, divider, rc, timer, colors, decodeBands, encodeBands, format } from '../calculators.js';
+import { convert, number, ohms, standardAbove, E12, E24, led, network, divider, rc, timer, idealTransformer, colors, decodeBands, encodeBands, format } from '../calculators.js';
 
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) <= Math.max(1e-12, Math.abs(expected) * 1e-10), `${actual} != ${expected}`);
 
@@ -164,4 +164,102 @@ test('engineering formatting is finite and unit-aware', () => {
   assert.equal(format(10e-6, 'F'), '10 uF');
   assert.equal(format(0, 'V'), '0 V');
   assert.throws(() => format(Infinity));
+});
+
+test('Vishay 20143 independent five-band vectors, including fractional multipliers', () => {
+  for (const [bands, resistance, tolerance, min, max] of [
+    [['Yellow', 'Violet', 'Black', 'Brown', 'Brown'], 4700, 1, 4653, 4747],
+    [['Red', 'Red', 'Black', 'Gold', 'Brown'], 22, 1, 21.78, 22.22],
+    [['Brown', 'Black', 'Black', 'Silver', 'Red'], 1, 2, 0.98, 1.02],
+    [['Blue', 'Grey', 'Black', 'Red', 'Blue'], 68000, 0.25, 67830, 68170],
+    [['Brown', 'Black', 'Black', 'Black', 'Grey'], 100, 0.05, 99.95, 100.05],
+    [['White', 'White', 'White', 'White', 'Silver'], 999e9, 10, 899.1e9, 1098.9e9],
+  ]) {
+    const result = decodeBands(bands);
+    close(result.resistance, resistance); close(result.tolerance, tolerance);
+    close(result.min, min); close(result.max, max);
+    assert.deepEqual(encodeBands(resistance, 5, bands[4]), bands);
+  }
+  for (const invalid of [
+    ['Black', 'Red', 'Red', 'Brown', 'Brown'],
+    ['Brown', 'Gold', 'Red', 'Brown', 'Brown'],
+    ['Brown', 'Black', 'Silver', 'Brown', 'Brown'],
+    ['Brown', 'Black', 'Red', 'Brown', 'Black'],
+    ['Brown', 'Black', 'Red', 'Brown', 'Orange'],
+    ['Brown', 'Black', 'Red', 'Brown', 'Yellow'],
+    ['Brown', 'Black', 'Red', 'Brown', 'White'],
+  ]) assert.throws(() => decodeBands(invalid));
+});
+
+test('supported color roles independently match the manufacturer table', () => {
+  const expected = [
+    ['Black', 0, 0, undefined], ['Brown', 1, 1, 1], ['Red', 2, 2, 2],
+    ['Orange', 3, 3, undefined], ['Yellow', 4, 4, undefined], ['Green', 5, 5, 0.5],
+    ['Blue', 6, 6, 0.25], ['Violet', 7, 7, 0.1], ['Grey', 8, 8, 0.05],
+    ['White', 9, 9, undefined], ['Gold', undefined, -1, 5], ['Silver', undefined, -2, 10],
+  ];
+  assert.deepEqual(colors.map(c => [c.name, c.digit, c.exponent, c.tolerance]), expected);
+});
+
+test('ideal transformer solves all four unknowns from independent low-voltage vectors', () => {
+  for (const [solve, known, expected] of [
+    ['vs', { vp: 12, np: 600, ns: 300 }, 6],
+    ['vp', { vs: 6, np: 600, ns: 300 }, 12],
+    ['ns', { vp: 12, vs: 6, np: 600 }, 300],
+    ['np', { vp: 12, vs: 6, ns: 300 }, 600],
+    ['vs', { vp: 3, np: 100, ns: 400 }, 12],
+    ['ns', { vp: 12, vs: 5, np: 100 }, 125 / 3],
+    ['np', { vp: 5, vs: 12, ns: 100 }, 125 / 3],
+  ]) {
+    const result = idealTransformer(solve, known);
+    close(result[solve], expected);
+    assert.equal(result.ip, null); assert.equal(result.is, null); assert.equal(result.va, null);
+  }
+});
+
+test('transformer current directions conserve ideal apparent power, with units and zero-load limit', () => {
+  const known = { vp: convert(12000, 'voltage', 'mV'), np: 600, ns: 300 };
+  for (const load of [
+    { side: 'secondary', current: convert(200, 'current', 'mA') },
+    { side: 'primary', current: convert(100000, 'current', 'uA') },
+  ]) {
+    const result = idealTransformer('vs', known, load);
+    close(result.ip, 0.1); close(result.is, 0.2); close(result.va, 1.2);
+  }
+  const up = idealTransformer('vp', { vs: 12, np: 100, ns: 400 }, { side: 'secondary', current: 0.05 });
+  close(up.vp, 3); close(up.ip, 0.2); close(up.va, 0.6);
+  for (const side of ['primary', 'secondary']) {
+    const result = idealTransformer('vs', known, { side, current: 0 });
+    assert.equal(result.ip, 0); assert.equal(result.is, 0); assert.equal(result.va, 0);
+  }
+});
+
+test('transformer rejects missing, nonphysical and unrepresentable inputs explicitly', () => {
+  const known = { vp: 12, np: 600, ns: 300 };
+  assert.throws(() => idealTransformer('bad', known));
+  for (const value of ['', ' ', -1, 0, NaN, Infinity]) {
+    for (const key of ['vp', 'np', 'ns']) assert.throws(() => idealTransformer('vs', { ...known, [key]: value }));
+  }
+  assert.throws(() => idealTransformer('vs', { np: 600, ns: 300 }));
+  for (const key of ['np', 'ns']) for (const value of [0.5, 600.1, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => idealTransformer('vs', { ...known, [key]: value }), /whole numbers/);
+  }
+  for (const current of ['', -1, Infinity, NaN]) assert.throws(() => idealTransformer('vs', known, { side: 'secondary', current }));
+  assert.throws(() => idealTransformer('vs', known, { side: 'unknown', current: 1 }));
+  assert.throws(() => idealTransformer('vs', { vp: 1e308, np: 1, ns: 100 }));
+  assert.throws(() => idealTransformer('vs', { vp: 5e-324, np: 100, ns: 1 }));
+  assert.throws(() => idealTransformer('vs', known, { side: 'primary', current: 1e308 }));
+  assert.throws(() => idealTransformer('vs', known, { side: 'secondary', current: 5e-324 }));
+});
+
+test('transformer ratios and currents preserve identities over step-up and step-down cases', () => {
+  for (const vp of [0.5, 3, 12, 24]) for (const np of [1, 100, 600]) for (const ns of [1, 50, 300, 1200]) {
+    const result = idealTransformer('vs', { vp, np, ns }, { side: 'secondary', current: 0.125 });
+    close(result.vs / vp, ns / np);
+    close(result.ip / result.is, ns / np);
+    close(result.vp * result.ip, result.vs * result.is);
+    close(idealTransformer('vp', { vs: result.vs, np, ns }).vp, vp);
+    close(idealTransformer('np', { vp, vs: result.vs, ns }).np, np);
+    close(idealTransformer('ns', { vp, vs: result.vs, np }).ns, ns);
+  }
 });

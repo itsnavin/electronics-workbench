@@ -109,6 +109,31 @@ export function timer(mode, ra, capacitance, rb = null) {
   return { high, low, frequency, duty: finite(high / (high + low) * 100) };
 }
 
+export function idealTransformer(solve, known, load = null) {
+  const keys = ['vp', 'vs', 'np', 'ns'];
+  if (!keys.includes(solve)) throw new Error('Choose a voltage or turns quantity to find.');
+  const values = {};
+  for (const key of keys.filter(key => key !== solve)) {
+    values[key] = number(known[key], key.toUpperCase());
+    if (['np', 'ns'].includes(key) && !Number.isSafeInteger(values[key])) throw new Error('Known turn counts must be positive whole numbers within the safe integer range.');
+  }
+  if (solve === 'vs') values.vs = positiveResult(values.vp * (values.ns / values.np));
+  if (solve === 'vp') values.vp = positiveResult(values.vs * (values.np / values.ns));
+  if (solve === 'ns') values.ns = positiveResult(values.np * (values.vs / values.vp));
+  if (solve === 'np') values.np = positiveResult(values.ns * (values.vp / values.vs));
+  const ratio = positiveResult(values.ns / values.np);
+  let ip = null, is = null, va = null;
+  if (load !== null) {
+    if (!['primary', 'secondary'].includes(load.side)) throw new Error('Choose the known current winding.');
+    const current = number(load.current, 'RMS current', true);
+    if (load.side === 'primary') { ip = current; is = current === 0 ? 0 : positiveResult(current / ratio); }
+    else { is = current; ip = current === 0 ? 0 : positiveResult(current * ratio); }
+    va = ip === 0 ? 0 : positiveResult(values.vp * ip);
+    if (is !== 0) positiveResult(values.vs * is);
+  }
+  return { ...values, ratio, ip, is, va };
+}
+
 export const colors = [
   { name: 'Black', hex: '#171c24', digit: 0, exponent: 0 },
   { name: 'Brown', hex: '#855034', digit: 1, exponent: 1, tolerance: 1 },

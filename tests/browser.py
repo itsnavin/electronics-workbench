@@ -45,7 +45,7 @@ def run():
             # Optional isolation from host HTTP-injecting software; CI uses real HTTP.
             def serve_file(route):
                 name = route.request.url.removeprefix(base).split("?")[0].split("#")[0] or "index.html"
-                if name not in {"index.html", "styles.css", "app.js", "calculators.js", "catalog.js", "subnet.js"}:
+                if name not in {"index.html", "styles.css", "app.js", "calculators.js", "catalog.js", "subnet.js", "guides.js"}:
                     raise RuntimeError(f"Unexpected asset request: {name}")
                 route.fulfill(path=str(ROOT / "dist" / name))
             context.route(base + "**", serve_file)
@@ -82,6 +82,17 @@ def run():
         expect(page.locator("#band-3 option[value=White]")).to_have_count(0)
         page.get_by_label("Band count").select_option("5")
         expect(page.locator("#band-form select")).to_have_count(5)
+        for index in [1, 2]:
+            expect(page.locator(f"#band-{index} option[value=Black]")).to_have_count(1)
+            expect(page.locator(f"#band-{index} option[value=Gold]")).to_have_count(0)
+        expect(page.locator("#band-3 option[value=Gold]")).to_have_count(1)
+        expect(page.locator("#band-4 option[value=Orange]")).to_have_count(0)
+        for label, value in [("Digit 1", "Yellow"), ("Digit 2", "Violet"), ("Digit 3", "Black"), ("Multiplier", "Brown"), ("Tolerance", "Brown")]:
+            page.get_by_label(label, exact=True).select_option(value)
+        page.get_by_role("button", name="Read bands").click()
+        expect(page.locator("#calc-result")).to_contain_text("4.7 kohm +/-1%")
+        expect(page.locator("#calc-result")).to_contain_text("4.653 kohm to 4.747 kohm")
+        expect(page.locator(".explanation")).to_contain_text("ambiguous")
         page.get_by_label("Direction").select_option("write")
         page.get_by_label("Nominal resistance", exact=True).fill("4.7")
         page.get_by_role("button", name="Find colors").click()
@@ -91,6 +102,77 @@ def run():
         expect(page.locator("#calc-error")).to_contain_text("not exactly representable")
         expect(page.locator("#calc-result")).to_be_empty()
         print("PASS resistor directions, valid choices and rejection")
+
+        go("calculators/transformer")
+        expect(page.locator("#calc-result")).to_contain_text("Secondary voltage Vs (RMS): 6 V")
+        expect(page.locator("#calc-result")).to_contain_text("100 mA")
+        expect(page.locator("#calc-result")).to_contain_text("200 mA")
+        expect(page.locator("#calc-result")).to_contain_text("1.2 VA")
+        page.get_by_role("button", name="Copy result").click()
+        copied = page.evaluate("navigator.clipboard.readText()")
+        assert "1.2 VA" in copied and "not a winding design" in copied
+        page.locator("#transformer-vp-unit").select_option("mV")
+        expect(page.locator("#calc-result")).to_be_empty()
+        page.locator("#transformer-vp").fill("12000")
+        page.locator("#transformer-vp").press("Enter")
+        expect(page.locator("#calc-result")).to_contain_text("6 V")
+        page.get_by_label("Known current winding", exact=True).select_option("primary")
+        page.get_by_label("Known RMS current", exact=True).fill("100")
+        calculate()
+        expect(page.locator("#calc-result")).to_contain_text("200 mA")
+        page.get_by_label("Find unknown voltage or turns").select_option("vp")
+        expect(page.locator("#calc-result")).to_be_empty()
+        calculate()
+        expect(page.locator("#calc-result")).to_contain_text("Primary voltage Vp (RMS): 12 V")
+        for solve, label in [("np", "Primary turns Np: 600 turns"), ("ns", "Secondary turns Ns: 300 turns")]:
+            page.get_by_label("Find unknown voltage or turns").select_option(solve)
+            calculate()
+            expect(page.locator("#calc-result")).to_contain_text(label)
+        page.locator("#transformer-np").fill("100")
+        page.locator("#transformer-vs").fill("5")
+        calculate()
+        expect(page.locator("#calc-result")).to_contain_text("Fractional ideal turn count")
+        page.get_by_label("Include an ideal load-current calculation?").select_option("no")
+        expect(page.locator("#transformer-load-fields")).to_be_hidden()
+        calculate()
+        expect(page.locator("#calc-result")).not_to_contain_text("apparent power (each side)")
+        for bad, message in [("0", "positive"), ("-1", "positive"), ("100.5", "whole numbers"), ("", "required")]:
+            page.locator("#transformer-np").fill(bad)
+            calculate()
+            expect(page.locator("#calc-error")).to_contain_text(message)
+            expect(page.locator("#calc-result")).to_be_empty()
+        go("home")
+        go("calculators/transformer")
+        page.screenshot(path=str(ARTIFACTS / "desktop-transformer.png"), full_page=True)
+        page.get_by_label("Known RMS current", exact=True).fill("-1")
+        calculate()
+        expect(page.locator("#calc-error")).to_contain_text("non-negative")
+        page.get_by_label("Known RMS current", exact=True).fill("0")
+        calculate()
+        expect(page.locator("#calc-result")).to_contain_text("magnetizing")
+        print("PASS transformer unknowns, current directions, units, zero load, fractional turns, validation and copy")
+
+        go("multimeter")
+        expect(page.get_by_role("complementary", name="Multimeter safety")).to_contain_text("absence of voltage verified")
+        expect(page.locator("#meter-guide")).to_contain_text("continuity beep")
+        page.get_by_role("link", name="Capacitors", exact=True).focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#meter-guide h2")).to_have_text("Capacitors: multimeter checks")
+        expect(page.locator("#meter-guide")).to_contain_text("ESR")
+        expect(page.locator("#meter-guide")).to_contain_text("beyond range")
+        page.screenshot(path=str(ARTIFACTS / "desktop-capacitor-guide.png"), full_page=True)
+        page.get_by_role("link", name="Diodes", exact=True).click()
+        expect(page.locator("#meter-guide")).to_contain_text("meter compliance")
+        expect(page.locator("#meter-guide")).to_contain_text("reverse breakdown")
+        expect(page.locator(".probe-reference")).to_contain_text("RED probe")
+        expect(page.locator(".probe-reference")).to_contain_text("ANODE")
+        page.screenshot(path=str(ARTIFACTS / "desktop-diode-guide.png"), full_page=True)
+        go("home")
+        page.get_by_label("Search calculators and references").fill("ESR")
+        expect(page.locator("#search-results a")).to_have_count(1)
+        page.locator("#search-results a").click()
+        expect(page.locator("#meter-guide h2")).to_have_text("Capacitors: multimeter checks")
+        print("PASS all meter guides, safety, type limits, keyboard navigation, direct links and search")
 
         go("calculators/ohm")
         expect(page.locator("#calc-result")).to_contain_text("10 V")
@@ -305,12 +387,24 @@ def run():
         print("PASS IPv4 masks/prefixes, /0 /1 /31 /32, invalid inputs, unsigned values, binary, Enter and copy")
 
         for route in ["home", "calculators/resistor", "calculators/ohm", "calculators/led", "calculators/network",
-                      "calculators/divider", "calculators/rc", "calculators/timer", "ic/lm358p", "ic/sn74hc00n", "gpio", "ethernet", "subnet", "about"]:
+                      "calculators/divider", "calculators/rc", "calculators/timer", "calculators/transformer",
+                      "multimeter/resistor", "multimeter/capacitor", "multimeter/diode", "ic/lm358p", "ic/sn74hc00n", "gpio", "ethernet", "subnet", "about"]:
             page.set_viewport_size({"width": 375, "height": 812})
             go(route)
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), f"Horizontal overflow: {route}"
             assert page.locator("main h1").count() == 1
             assert page.locator("input:not([id]), select:not([id])").count() == 0
+            if route == "calculators/transformer":
+                page.locator("#transformer-ns").fill("1200")
+                page.locator("#transformer-ns").press("Enter")
+                expect(page.locator("#calc-result")).to_contain_text("24 V")
+                page.evaluate("window.scrollTo(0, 0)")
+                page.screenshot(path=str(ARTIFACTS / "mobile-transformer.png"), full_page=True)
+            if route.startswith("multimeter/"):
+                expect(page.locator(".guide-table")).to_have_count(2)
+                expect(page.get_by_role("complementary", name="Multimeter safety")).to_be_visible()
+                page.evaluate("window.scrollTo(0, 0)")
+                page.screenshot(path=str(ARTIFACTS / f"mobile-{route.split('/')[1]}-guide.png"), full_page=True)
             if route in ["ethernet", "subnet"]:
                 if route == "ethernet":
                     page.get_by_label("Wiring standard").select_option("T568A")
@@ -331,6 +425,8 @@ def run():
         expect(page.locator("#pin-result")).to_contain_text("BCM 17")
         page.screenshot(path=str(ARTIFACTS / "mobile-gpio.png"), full_page=True)
         go("calculators/not-real")
+        expect(page.locator("h1")).to_contain_text("not on this bench")
+        go("multimeter/not-real")
         expect(page.locator("h1")).to_contain_text("not on this bench")
         go("unknown")
         expect(page.locator("h1")).to_contain_text("not on this bench")

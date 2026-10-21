@@ -18,6 +18,8 @@ assets. All calculations run in the browser. GitHub Pages provides static hostin
 | Voltage divider | Unloaded result and optional resistive loading |
 | Capacitor / RC | Time constant, five time constants, first-order cutoff |
 | 555 | Standard astable and monostable, output-high duty cycle; NE555P timing scope |
+| Ideal transformer | Solve primary/secondary RMS voltage or turns; optional known primary/secondary load current, other current and apparent power in VA |
+| Multimeter guides | Safe isolated-component screening for resistor, capacitor and diode families; procedures, normal/suspect/ambiguous readings and instrument limitations |
 | IC library | TI NE555P PDIP-8, LM358P PDIP-8, SN74HC00N PDIP-14 only |
 | Raspberry Pi | Pi 4 Model B, Pi 5, Zero 2 W; interactive 40-pin header, physical/BCM lookup, power/ground, reserved HAT pins |
 | Ethernet cable reference | Selectable T568A/T568B, numbered contact-side 8P8C plug, wire names/pairs, straight-through/crossover, Gigabit and PoE cautions |
@@ -43,7 +45,7 @@ python -m http.server 4173 --directory dist
 ```
 
 Open http://localhost:4173. Alternatively serve the repository root while editing;
-the build copies the seven application files to `dist`. Never open modules directly
+the build copies the eight application files to `dist`. Never open modules directly
 with a `file:` URL.
 
 Browser tests require Playwright (development/CI only):
@@ -77,6 +79,67 @@ unexpected external asset requests. These are software/reference checks, not
 physical hardware validation or a complete assistive-technology audit.
 
 ## Reference provenance and maintenance
+
+### Component guides, five-band review and transformer theory (reviewed 2026-10-21)
+
+Direct links: [multimeter guides](https://itsnavin.github.io/electronics-workbench/#multimeter),
+[five-band resistor tool](https://itsnavin.github.io/electronics-workbench/#calculators/resistor)
+and [ideal transformer](https://itsnavin.github.io/electronics-workbench/#calculators/transformer).
+`guides.js` stores the original condensed component guidance and linked provenance:
+
+- Fluke's [resistance](https://www.fluke.com/en-us/learn/blog/digital-multimeters/how-to-measure-resistance),
+  [capacitance](https://www.fluke.com/en-us/learn/blog/digital-multimeters/how-to-measure-capacitance)
+  and [diode](https://www.fluke.com/en-us/learn/blog/digital-multimeters/how-to-test-diodes)
+  guides support isolated measurements, mode selection, range/lead effects and
+  ordinary silicon forward/reverse checks. Illustrative silicon readings are not
+  universal limits. Component-type caveats deliberately require the actual
+  datasheet and meter manual, especially LEDs, Schottky, Zener/TVS and bridges.
+  We do not repeat a universal capacitor discharge resistor/time, or the diode
+  article's questionable fixed "shorted" voltage; no such universal rules apply.
+- [Tektronix / Keithley application note 315](https://www.tek.com/en/documents/application-note/315-capacitor-leakage-measurements-using-model-6517a-electrometer)
+  explains leakage/insulation measurement as distinct from capacitance, including
+  dielectric/environment/test-condition dependence. Its energized test setups
+  are **not** reproduced; advanced tests require qualified personnel/equipment.
+- [Vishay dielectric comparison, document 40301, revision 19-Nov-2025](https://www.vishay.com/docs/40301/capacitordielectriccomparison.pdf)
+  distinguishes ESR, dielectric absorption, polarization, temperature and DC-bias
+  behavior across common capacitor families. The app gives qualitative caveats,
+  not universal limits or a health diagnosis from this comparison chart.
+- [Vishay document 20143, revision 28-Aug-2009](https://www.vishay.com/docs/20143/colorcod.pdf)
+  independently confirms the existing supported five-band arithmetic and color
+  roles; no arithmetic correction was needed. Three significant digits are
+  followed by multiplier and tolerance. Added independent examples include
+  yellow-violet-black-brown-brown = 4700 ohm +/-1% (4653–4747 ohm) and
+  red-red-black-gold-brown = 22 ohm +/-1%. Allowed digits, all multipliers and
+  tolerances now have a separate expected-table test, not just encode/decode
+  round trips. If tolerance-band spacing/orientation is ambiguous, do not guess.
+- [OpenStax College Physics 2e, 23.7](https://openstax.org/books/college-physics-2e/pages/23-7-transformers)
+  supports changing magnetic flux and ideal voltage/turns/current relationships.
+  Original worked example: 12 V RMS, 600:300 turns gives 6 V RMS;
+  200 mA secondary corresponds to 100 mA primary and 1.2 VA, not extra power.
+
+Meter guides distinguish fixed/variable/low-ohm/sensor resistors, common polarized
+and nonpolar capacitor families, and ordinary/LED/Schottky/Zener/TVS/bridge diodes.
+High-energy/supercapacitor/mains capacitor work is explicitly out of scope.
+Capacitance within tolerance does not establish ESR/leakage health; diode mode
+does not certify reverse breakdown or rated-current performance.
+
+Transformer input voltages are positive RMS magnitudes, known turns positive
+whole numbers and optional known current nonnegative. Solved fractional turns
+remain an ideal number, never silently rounded. AC voltage/turns ratios alone
+cannot supply absolute turn counts without one known winding count. The optional
+current can be known on either winding; the other current and apparent power are
+calculated, not rated limits. RMS volts times RMS amps is VA; real watts equal
+that number only at unity power factor. The ideal no-load zero-current result
+omits real magnetizing/loss current. There is no DC experiment, construction
+procedure, wire/core sizing or isolation/safety certification.
+
+Added regression coverage includes all four unknowns, both current directions,
+unit conversions, zero load, step-up/down conservation identities, fractional
+turns and invalid/overflow/underflow boundaries. Browser checks cover guides,
+keyboard/search/deep links, all transformer modes, unit changes, validation,
+stale results, copy and 375px layouts. To maintain these learning references,
+recheck the linked source and exact meter/part conditions, keep safety boundaries
+visible, and update `guides.js`, related examples and independent tests together.
 
 The data in `catalog.js` records manufacturer, orderable part, package, source,
 document ID/revision, relevant sections and review date. Reviewed 2026-10-19:
@@ -188,8 +251,9 @@ The workflow can also be run manually. No repository secrets are needed.
 
 ## Important limitations
 
-- Ideal calculations are estimates, not design certification. Low-voltage DC
-  learning only; no mains/high-energy instructions. Power off before wiring.
+- Ideal calculations are estimates, not design certification. Practical circuits
+  cover low-voltage DC; transformer AC theory is educational, not construction.
+  No mains/high-energy instructions. Power off before wiring.
 - Resistor band encoding supports nonzero, exactly representable 4/5-band values,
   with multipliers 0.01 through 1e9. No zero-ohm jumper or absent tolerance band.
 - LED sizing assumes fixed supply/forward voltage. At least twice calculated
